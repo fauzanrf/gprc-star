@@ -1,0 +1,177 @@
+services:
+
+  # ── MySQL ────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: starlink_mysql
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Jakarta}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-starlink_db}
+      MYSQL_USER: ${DB_USER:-starlink}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-starlink_pass}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
+             "-u", "${DB_USER:-starlink}", "-p${DB_PASSWORD:-starlink_pass}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - starlink_net
+
+  # ── Backend (FastAPI) ────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: starlink_backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Asia/Jakarta}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: ${DB_USER:-starlink}
+      DB_PASSWORD: ${DB_PASSWORD:-starlink_pass}
+      DB_NAME: ${DB_NAME:-starlink_db}
+      SCRAPER_DIR: /app/scraper
+      STARLINK_STATE_FILE: /app/scraper/auth_state.json
+      # Export JSON dibaca dari volume shared
+      STARLINK_OUTPUT_JSON: /data/starlink_export.json
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./scraper:/app/scraper
+      - export_data:/data
+    networks:
+      - starlink_net
+
+  # ── Scraper (Playwright + Scheduler) ────────────────────
+  scraper:
+    build:
+      context: .
+      dockerfile: scraper/Dockerfile
+    container_name: starlink_scraper
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Asia/Jakarta}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: ${DB_USER:-starlink}
+      DB_PASSWORD: ${DB_PASSWORD:-starlink_pass}
+      DB_NAME: ${DB_NAME:-starlink_db}
+      HEADLESS: "true"
+      PARALLEL_WORKERS: ${PARALLEL_WORKERS:-3}
+      SCRAPE_INTERVAL_HOURS: ${SCRAPE_INTERVAL_HOURS:-1}
+      SCHEDULER_STARTUP_WAIT: "30"
+      SAVE_TO_DB: "true"
+      STARLINK_OUTPUT_JSON: /data/starlink_export.json
+      SCRAPER_DIR: /app/scraper
+      # WA Gateway
+      WA_ENABLED: ${WA_ENABLED:-true}
+      WA_GATEWAY_URL: http://wa-gateway:3001
+      WA_API_SECRET: ${WA_API_SECRET:-changeme-wa-secret}
+      WA_TARGET: ${WA_TARGET:-}
+    volumes:
+      - ./scraper:/app/scraper
+      - export_data:/data
+    networks:
+      - starlink_net
+
+  # ── WhatsApp Gateway (Baileys) ───────────────────────────
+  wa-gateway:
+    build:
+      context: ./wa-gateway
+      dockerfile: Dockerfile
+    container_name: starlink_wa_gateway
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+      API_SECRET: ${WA_API_SECRET:-changeme-wa-secret}
+      SESSION_DIR: /app/session
+    ports:
+      # Hanya akses dari localhost VPS (untuk setup QR awal)
+      # Akses: ssh -L 3001:localhost:3001 user@<VPS_IP> lalu buka http://localhost:3001/qr
+      # Setelah WA terhubung, port ini tidak perlu dibuka lagi
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - wa_session:/app/session
+    networks:
+      - starlink_net
+
+  # ── Frontend (React) ─────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: starlink_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    networks:
+      - starlink_net
+
+  # ── Nginx (Reverse Proxy) ────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: starlink_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+      - phpmyadmin
+    networks:
+      - starlink_net
+
+  # ── phpMyAdmin (Database Manager) ───────────────────────
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: starlink_phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_ABSOLUTE_URI: /phpmyadmin/
+      UPLOAD_LIMIT: 128M
+      MEMORY_LIMIT: 256M
+    ports:
+      - "8080:80"
+    networks:
+      - starlink_net
+
+# ── Volumes ──────────────────────────────────────────────
+volumes:
+  mysql_data:
+    driver: local
+  export_data:        # shared antara scraper dan backend
+    driver: local
+  wa_session:         # Baileys WA session (persistent)
+    driver: local
+
+# ── Networks ─────────────────────────────────────────────
+networks:
+  starlink_net:
+    driver: bridge

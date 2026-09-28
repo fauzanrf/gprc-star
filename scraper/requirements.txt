@@ -1,0 +1,7 @@
+playwright
+playwright-stealth
+PyMySQL
+SQLAlchemy
+python-dotenv
+requests>=2.31.0
+filelock>=3.14.0

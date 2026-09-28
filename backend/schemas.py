@@ -1,0 +1,107 @@
+"""Pydantic schemas for request/response."""
+from __future__ import annotations
+from datetime import datetime
+from typing import Optional, List
+from pydantic import BaseModel
+
+
+# ── Parent Account ───────────────────────────────────────────────────────────
+class ParentAccountBase(BaseModel):
+    account_name: str
+    email: str
+
+class ParentAccountCreate(ParentAccountBase):
+    password: Optional[str] = None
+
+class ParentAccountOut(ParentAccountBase):
+    id: int
+    is_active: bool
+    is_valid: bool
+    last_scraped_at: Optional[datetime]
+    created_at: Optional[datetime]
+    sub_account_count: Optional[int] = 0
+    total_kits: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
+
+# ── Account ──────────────────────────────────────────────────────────────────
+class AccountBase(BaseModel):
+    account_number: str
+    account_name: str
+
+class AccountOut(AccountBase):
+    id: int
+    parent_account_id: Optional[int] = None
+    email: Optional[str] = None
+    parent_account_name: Optional[str] = None
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+    kit_count: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
+
+# ── Kit ──────────────────────────────────────────────────────────────────────
+class KitOut(BaseModel):
+    id: int
+    account_id: int
+    account_number: Optional[str] = None
+    account_name: Optional[str] = None
+    site: Optional[str]
+    sn: Optional[str]
+    kit: Optional[str]
+    status: str     # active | restricted | suspended | inactive
+    quota: Optional[str]
+    quota_alert: Optional[str] = None  # "limit" (>=5TB) | "near_full" (4.5-5TB) | None
+    restriction_detail: Optional[str]
+    scraped_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+# ── Scrape Job ────────────────────────────────────────────────────────────────
+class ScrapeJobOut(BaseModel):
+    id: int
+    status: str
+    workers: int
+    total_kits: int
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+class StartScrapeRequest(BaseModel):
+    workers: Optional[int] = None   # None = pakai PARALLEL_WORKERS dari env
+    parent_account_id: Optional[int] = None  # None = scrape semua akun aktif
+
+
+# ── Dashboard Stats ───────────────────────────────────────────────────────────
+class DashboardStats(BaseModel):
+    total_kits: int
+    active: int
+    restricted: int
+    suspended: int
+    inactive: int
+    total_accounts: int
+    limit_quota_count: Optional[int] = 0
+    near_full_quota_count: Optional[int] = 0
+    quota_alerts: Optional[List[dict]] = []
+    last_scraped_at: Optional[datetime] = None
+    next_scraped_at: Optional[datetime] = None
+    is_scraping: bool = False
+    scrape_interval_seconds: int = 3600
+
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class SessionStatus(BaseModel):
+    is_valid: bool
+    updated_at: Optional[datetime]
