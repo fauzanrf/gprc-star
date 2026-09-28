@@ -206,7 +206,28 @@ def disconnect_wa():
             timeout=10
         )
         if r.status_code == 200:
-            return {"ok": True, "message": "Sesi WhatsApp berhasil diputuskan."}
+            return r.json()
         raise HTTPException(status_code=r.status_code, detail=r.text)
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"Gagal menghubungi WA Gateway: {e}")
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Gagal memutuskan koneksi: {e}")
+        raise HTTPException(status_code=500, detail=f"Gagal memutuskan koneksi: {e}")
+
+
+@router.post("/reload")
+def reload_wa():
+    """Paksa reset sesi dan reload QR code baru."""
+    try:
+        r = requests.post(
+            f"{WA_GATEWAY_URL}/reload",
+            headers={"X-API-Key": WA_API_SECRET},
+            timeout=10
+        )
+        if r.status_code == 200:
+            return r.json()
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"Gagal menghubungi WA Gateway: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal me-reload gateway: {e}")
+

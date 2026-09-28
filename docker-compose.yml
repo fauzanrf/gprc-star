@@ -47,6 +47,9 @@ services:
       STARLINK_STATE_FILE: /app/scraper/auth_state.json
       # Export JSON dibaca dari volume shared
       STARLINK_OUTPUT_JSON: /data/starlink_export.json
+      # WA Gateway
+      WA_GATEWAY_URL: http://wa-gateway:3001
+      WA_API_SECRET: ${WA_API_SECRET:-Strl1nkWA-s3cr3t-2026!}
     ports:
       - "8000:8000"
     volumes:
@@ -101,7 +104,7 @@ services:
     restart: unless-stopped
     environment:
       PORT: "3001"
-      API_SECRET: ${WA_API_SECRET:-changeme-wa-secret}
+      API_SECRET: ${WA_API_SECRET:-Strl1nkWA-s3cr3t-2026!}
       SESSION_DIR: /app/session
     ports:
       # Hanya akses dari localhost VPS (untuk setup QR awal)

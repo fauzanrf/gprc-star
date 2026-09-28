@@ -21,7 +21,8 @@ import {
   getWhatsAppConfig,
   saveWhatsAppConfig,
   sendWhatsAppTest,
-  disconnectWhatsApp
+  disconnectWhatsApp,
+  reloadWhatsApp
 } from '../api'
 
 export default function WhatsAppPage() {
@@ -45,6 +46,7 @@ export default function WhatsAppPage() {
   const [testResult, setTestResult] = useState(null) // { ok: bool, message: str }
 
   const [disconnecting, setDisconnecting] = useState(false)
+  const [reloading, setReloading] = useState(false)
 
   // Helper untuk format nomor ke format WA (628xxx@s.whatsapp.net)
   const formatPhoneToJid = (val) => {
@@ -198,6 +200,21 @@ export default function WhatsAppPage() {
     }
   }
 
+  // Handle Reload / Force new QR
+  const handleReload = async () => {
+    setReloading(true)
+    try {
+      await reloadWhatsApp()
+      setTimeout(() => {
+        fetchAll()
+      }, 1000)
+    } catch (err) {
+      alert('Gagal me-reload WhatsApp Gateway: ' + (err.message || err))
+    } finally {
+      setTimeout(() => setReloading(false), 2000)
+    }
+  }
+
   const effectiveJid = targetType === 'personal' ? formatPhoneToJid(phone) : selectedGroup
 
   return (
@@ -296,37 +313,75 @@ export default function WhatsAppPage() {
                       <img src={status.qr} alt="QR Code WhatsApp" style={{ width: 220, height: 220, display: 'block' }} />
                     </div>
                     <p style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 10 }}>
-                      QR diperbarui otomatis setiap 30 detik.
+                      QR diperbarui otomatis. Jika scan gagal atau QR kadaluarsa, klik tombol di bawah.
                     </p>
+                    <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={handleReload}
+                        disabled={reloading}
+                        style={{ fontSize: 12, gap: 6, padding: '4px 12px' }}
+                      >
+                        <RefreshCw size={12} className={reloading ? 'spin' : ''} />
+                        {reloading ? 'Membuat QR Baru...' : 'Perbarui QR Code'}
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <div style={{ padding: '24px 0' }}>
-                    <QrCode size={36} color="var(--text-light)" style={{ marginBottom: 10 }} />
+                  <div style={{ padding: '24px 8px' }}>
+                    <QrCode size={38} color="var(--text-light)" style={{ marginBottom: 10 }} />
                     <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-secondary)' }}>
                       Menghubungkan ke WhatsApp Gateway...
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                      Silakan tunggu beberapa saat atau klik Refresh Status.
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, marginBottom: 16 }}>
+                      Jika QR code belum muncul atau sesi terputus, klik tombol di bawah untuk membuat ulang QR code.
                     </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleReload}
+                      disabled={reloading}
+                      style={{ fontSize: 13, gap: 8, display: 'inline-flex', alignItems: 'center' }}
+                    >
+                      <RefreshCw size={14} className={reloading ? 'spin' : ''} />
+                      {reloading ? 'Menyiapkan QR Baru...' : 'Muat Ulang / Buat QR Baru'}
+                    </button>
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {status.connected && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ display: 'flex', justifyContent: status.connected ? 'space-between' : 'flex-end', alignItems: 'center', paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+            {!status.connected ? (
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={handleDisconnect}
-                disabled={disconnecting}
-                style={{ fontSize: 12.5, color: '#dc2626', borderColor: '#fecaca', gap: 6 }}
+                onClick={handleReload}
+                disabled={reloading}
+                style={{ fontSize: 12, color: 'var(--purple-main)', borderColor: 'var(--purple-border)', gap: 6 }}
               >
-                <LogOut size={13} /> {disconnecting ? 'Memutuskan...' : 'Putuskan Sesi WhatsApp'}
+                <RefreshCw size={12} className={reloading ? 'spin' : ''} />
+                {reloading ? 'Memproses...' : 'Reset Sesi & Siapkan QR Baru'}
               </button>
-            </div>
-          )}
+            ) : (
+              <>
+                <span style={{ fontSize: 12, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                  <CheckCircle2 size={14} /> Terhubung aktif
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                  style={{ fontSize: 12.5, color: '#dc2626', borderColor: '#fecaca', gap: 6 }}
+                >
+                  <LogOut size={13} /> {disconnecting ? 'Memutuskan...' : 'Putuskan Sesi WhatsApp'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* KARTU 2: Pengaturan Target Notifikasi (Nomor Sendiri / Grup) */}

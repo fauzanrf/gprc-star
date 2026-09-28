@@ -1,6 +1,6 @@
 {
   "name": "starlink-wa-gateway",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "WhatsApp Gateway for Starlink GPRC notifications using Baileys",
   "main": "index.js",
   "scripts": {
