@@ -5,3 +5,4 @@ SQLAlchemy
 python-dotenv
 requests>=2.31.0
 filelock>=3.14.0
+openpyxl>=3.1.2
