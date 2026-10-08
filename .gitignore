@@ -1,1 +1,12 @@
 .env
+auth_state.json
+scraper/auth_state.json
+starlink_export.json
+starlink_export.xlsx
+*.xlsx
+local_dashboard.html
+local_dashboard.py
+scraper/__pycache__/
+__pycache__/
+*.pyc
+*.pyo

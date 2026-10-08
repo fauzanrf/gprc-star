@@ -36,18 +36,19 @@ if "%opt%"=="8" goto KELUAR
 :RUN_DASHBOARD
 echo.
 echo ======================================================================
-echo          MEMBUKA STARLINK WEB DASHBOARD...
+echo          MEMBUKA STARLINK WEB DASHBOARD LOCAL...
 echo ======================================================================
-echo Membuka http://localhost di browser...
-start http://localhost
+echo Membuka http://localhost:8080 di browser...
+start http://localhost:8080
+python local_dashboard.py
 goto PAUSE_END
 
 :SCRAPE_PARALLEL
 echo.
 echo ======================================================================
-echo          MENJALANKAN PARALLEL SCRAPING STARLINK...
+echo          MENJALANKAN PARALLEL SCRAPING STARLINK (3 WORKER)...
 echo ======================================================================
-python scraper/parallel_scraper.py
+python scraper/parallel_scraper.py --workers 3
 goto PAUSE_END
 
 :SCRAPE_SERIAL

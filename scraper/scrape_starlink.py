@@ -714,7 +714,25 @@ async def scrape_accounts(
                                         break
 
                                 if len(sl_map) == 0:
-                                    print(f"[W{worker_id}]   [Info] {acc_name} ({acc_num}) tidak memiliki subscription (0 service lines). Melewati.", flush=True)
+                                    print(f"[W{worker_id}]   [Info] {acc_name} ({acc_num}) 0 service line aktif. Mencatat {len(ut_results)} terminal sebagai inactive.", flush=True)
+                                    for t in ut_results:
+                                        kit    = t.get("kitSerialNumber") or t.get("serialNumber") or "-"
+                                        sn     = t.get("dishSerialNumber") or "-"
+                                        t_nick = (t.get("nickname") or "").strip()
+                                        site   = t_nick or acc_name
+                                        rows.append(KitRow(
+                                            no=0,
+                                            controller=acc_name,
+                                            code=acc_num,
+                                            site=site,
+                                            sn=sn,
+                                            kit=kit,
+                                            status="inactive",
+                                            quota="-",
+                                            restriction_detail="No active service line",
+                                            scraped_at=scraped_at,
+                                        ))
+                                        print(f"[W{worker_id}]     {site} | {kit} | [- INACTIVE] | -", flush=True)
                                     if checkpoint:
                                         checkpoint.mark_done(acc_num)
                                     break
@@ -740,33 +758,32 @@ async def scrape_accounts(
 
                                 # Tulis baris per terminal
                                 for t in ut_results:
-                                    kit    = t.get("kitSerialNumber") or "-"
+                                    kit    = t.get("kitSerialNumber") or t.get("serialNumber") or "-"
                                     sn     = t.get("dishSerialNumber") or "-"
                                     sl_num = t.get("serviceLineNumber") or ""
                                     t_nick = (t.get("nickname") or "").strip()
                                     api_active = bool(t.get("active"))
 
-                                    # Validasi kepemilikan service-line untuk mencegah crosstalk antar akun
+                                    # Validasi kepemilikan service-line
                                     t_sl_item = sl_map.get(sl_num, {})
                                     sl_acc_ref = t_sl_item.get("accountReferenceId") if isinstance(t_sl_item, dict) else None
-                                    if sl_num not in sl_map:
-                                        if sl_acc_ref and sl_acc_ref in acc_map:
-                                            final_code = sl_acc_ref
-                                            final_controller = acc_map[sl_acc_ref]
-                                        else:
-                                            # Terminal residu sesi yang tidak terdaftar di akun ini — jangan kaitkan!
-                                            continue
+                                    if sl_acc_ref and sl_acc_ref in acc_map:
+                                        final_code = sl_acc_ref
+                                        final_controller = acc_map[sl_acc_ref]
                                     else:
-                                        if sl_acc_ref and sl_acc_ref in acc_map:
-                                            final_code = sl_acc_ref
-                                            final_controller = acc_map[sl_acc_ref]
-                                        else:
-                                            final_code = acc_num
-                                            final_controller = acc_name
+                                        final_code = acc_num
+                                        final_controller = acc_name
 
-                                    base_site, quota, sl_status, sl_det = sl_info.get(
-                                        sl_num, (sl_num or "-", "-", "active", "")
-                                    )
+                                    if sl_num not in sl_map:
+                                        base_site = sl_num or acc_name
+                                        quota = "-"
+                                        sl_status = "inactive"
+                                        sl_det = "Subscription inactive"
+                                    else:
+                                        base_site, quota, sl_status, sl_det = sl_info.get(
+                                            sl_num, (sl_num or "-", "-", "active", "")
+                                        )
+
                                     site = t_nick or base_site or "-"
                                     has_data = bool(quota not in ("-", "0.00 GB", "0 GB", "0 MB", "0.0 GB"))
 
@@ -905,6 +922,7 @@ async def scrape_accounts(
                                 final_code = acc_num
                                 final_controller = acc_name
 
+                            t_site = (t.get("nickname") or "").strip() or site_name
                             rows.append(KitRow(
                                 no=0, controller=final_controller, code=final_code, site=t_site,
                                 sn=sn, kit=kit,

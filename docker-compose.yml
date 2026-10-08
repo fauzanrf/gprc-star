@@ -136,7 +136,9 @@ services:
     container_name: starlink_nginx
     restart: unless-stopped
     ports:
-      - "80:80"
+      # Port 80 di VPS sudah dipakai system nginx (NocoDB).
+      # Starlink app diekspos di port 8181; system nginx akan proxy ke sini.
+      - "8181:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -161,7 +163,8 @@ services:
       UPLOAD_LIMIT: 128M
       MEMORY_LIMIT: 256M
     ports:
-      - "8080:80"
+      # Port 8080 di VPS sudah dipakai NocoDB. Pakai 8282.
+      - "8282:80"
     networks:
       - starlink_net
 

@@ -255,12 +255,23 @@ def deduplicate_rows(rows: list) -> list:
     return deduped
 
 
-def merge_results(worker_output_files: list) -> list:
+def merge_results(worker_output_files: list, existing_json_path: str | Path | None = None) -> list:
     """
     Gabungkan semua file JSON dari worker menjadi satu list.
     Deduplikasi KIT fisik unik dan assign nomor urut berurutan dari 1.
+    Jika existing_json_path ada, pertahankan KIT historis yang belum terambil di sesi ini.
     """
     merged = []
+
+    # Muat data lama terlebih dahulu jika ada, agar tidak ada KIT historis yang terhapus
+    if existing_json_path and Path(existing_json_path).exists():
+        try:
+            old_data = json.loads(Path(existing_json_path).read_text(encoding="utf-8"))
+            if isinstance(old_data, list):
+                merged.extend(old_data)
+        except Exception as e:
+            print(f"[Orchestrator] [!] Gagal baca existing JSON: {e}", flush=True)
+
     for f in worker_output_files:
         p = Path(f)
         if p.exists():
@@ -414,7 +425,7 @@ def run_parallel(
 
     # 6. Merge hasil dari semua worker
     print(f"\n[Orchestrator] Menggabungkan hasil dari {actual_workers} worker...", flush=True)
-    merged = merge_results(worker_outputs)
+    merged = merge_results(worker_outputs, existing_json_path=output_json)
 
     # Simpan kembali ke MySQL jika save_to_db aktif agar seluruh data ter-deduplikasi bersih
     if os.getenv("SAVE_TO_DB", "true").lower() in ("true", "1", "yes"):
@@ -427,7 +438,16 @@ def run_parallel(
     # 7. Simpan output JSON final
     out_path = Path(output_json).resolve()
     out_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[Orchestrator] Output disimpan: {out_path}", flush=True)
+    print(f"[Orchestrator] Output JSON disimpan: {out_path}", flush=True)
+
+    # Simpan juga ke Excel (.xlsx) agar terbaca langsung di spreadsheet lokal
+    xlsx_path = out_path.with_suffix(".xlsx")
+    try:
+        from export_excel import save_to_excel
+        save_to_excel(merged, xlsx_path)
+        print(f"[Orchestrator] Output Excel disimpan: {xlsx_path}", flush=True)
+    except Exception as e:
+        print(f"[Orchestrator] [Excel Error] Gagal simpan Excel: {e}", flush=True)
 
     # 8. Cleanup file temporer
     temp_files = worker_outputs + [str(accounts_tmp), str(rate_state_path), str(checkpoint_path)]
