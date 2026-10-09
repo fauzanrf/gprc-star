@@ -151,7 +151,7 @@ class UserCreate(BaseModel):
     name: str
     email: str
     password: str
-    role: Optional[str] = "noc1"
+    role: Optional[str] = "viewer"
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None

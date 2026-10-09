@@ -69,9 +69,9 @@ def logout(current_user: User = Depends(get_current_user)):
 @router.get("/users", response_model=List[UserOut])
 def list_users(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("super_admin", "noc2")),
+    _: User = Depends(require_roles("admin", "super_admin", "viewer")),
 ):
-    """Lists all registered users. Restricted to Super Admin and NOC 2."""
+    """Lists all registered users. Restricted to Admin and Viewer."""
     users = db.query(User).order_by(User.id.asc()).all()
     return [UserOut.from_orm(u) for u in users]
 
@@ -80,16 +80,16 @@ def list_users(
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("super_admin", "noc2")),
+    _: User = Depends(require_roles("admin", "super_admin")),
 ):
-    """Creates a new user account."""
+    """Creates a new user account. Restricted to Admin."""
     clean_email = payload.email.strip().lower()
     exists = db.query(User).filter(func.lower(User.email) == clean_email).first()
     if exists:
         raise HTTPException(status_code=400, detail="Email sudah terdaftar.")
 
-    allowed_roles = ["super_admin", "noc2", "noc1", "technical_support", "magang", "provisioning"]
-    role = payload.role if payload.role in allowed_roles else "noc1"
+    allowed_roles = ["admin", "viewer"]
+    role = payload.role if payload.role in allowed_roles else "viewer"
 
     new_user = User(
         name=payload.name.strip(),
@@ -108,9 +108,9 @@ def update_user(
     user_id: int,
     payload: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("super_admin", "noc2")),
+    current_user: User = Depends(require_roles("admin", "super_admin")),
 ):
-    """Updates user information and role. Restricted to Super Admin & NOC 2."""
+    """Updates user information and role. Restricted to Admin."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User tidak ditemukan.")
@@ -126,7 +126,7 @@ def update_user(
     if payload.password is not None and payload.password.strip():
         user.password_hash = hash_password(payload.password)
     if payload.role is not None:
-        allowed_roles = ["super_admin", "noc2", "noc1", "technical_support", "magang", "provisioning"]
+        allowed_roles = ["admin", "viewer"]
         if payload.role in allowed_roles:
             user.role = payload.role
 
@@ -140,7 +140,7 @@ def update_user(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("super_admin", "noc2")),
+    current_user: User = Depends(require_roles("admin", "super_admin")),
 ):
     """Deletes a user. Cannot delete own account."""
     if current_user.id == user_id:

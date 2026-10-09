@@ -129,8 +129,8 @@ class User(Base):
     email         = Column(String(150), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     role          = Column(
-        Enum("super_admin", "noc2", "noc1", "technical_support", "magang", "provisioning", name="user_role"),
-        default="noc1",
+        String(50),
+        default="viewer",
         nullable=False,
     )
     avatar_url    = Column(String(255), nullable=True)

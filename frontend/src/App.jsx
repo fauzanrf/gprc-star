@@ -36,7 +36,7 @@ const NAV_GROUPS = [
       { to: '/kits', icon: Monitor, label: 'KIT / Terminal' },
       { to: '/accounts', icon: Users, label: 'Accounts' },
       { to: '/scraping', icon: RefreshCw, label: 'Scraping Control' },
-      { to: '/acl', icon: Shield, label: 'Manajemen ACL' },
+      { to: '/acl', icon: Shield, label: 'Manajemen ACL', adminOnly: true },
     ]
   },
   {
@@ -225,10 +225,13 @@ export default function App() {
         )}
 
         <nav className="nav-container">
-          {NAV_GROUPS.map((group, idx) => (
-            <div key={idx} className="nav-group">
-              <div className="nav-group-title">{group.title}</div>
-              {group.items.map((item) =>
+          {NAV_GROUPS.map((group, idx) => {
+            const filteredItems = group.items.filter(item => !item.adminOnly || (role === 'admin' || role === 'super_admin'))
+            if (filteredItems.length === 0) return null
+            return (
+              <div key={idx} className="nav-group">
+                <div className="nav-group-title">{group.title}</div>
+                {filteredItems.map((item) =>
                 item.external ? (
                   <a
                     key={item.href}
@@ -258,7 +261,8 @@ export default function App() {
                 )
               )}
             </div>
-          ))}
+            )
+          })}
         </nav>
 
         <div className="sidebar-footer">

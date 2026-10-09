@@ -26,8 +26,8 @@ function StatusBadge({ status }) {
 
 export default function Accounts({ selectedParentId }) {
   const { session, can } = useAuth()
-  const isMagang = session?.role === 'magang'
-  const canEdit = !isMagang && (can('edit_accounts') || can('crud_starlink') || can('crud_client') || !session)
+  const isViewer = session?.role === 'viewer' || session?.role === 'magang'
+  const canEdit = !isViewer && (can('edit_accounts') || can('crud_starlink') || can('crud_client') || !session)
 
   const [accounts, setAccounts] = useState([])
   const [parentAccounts, setParentAccounts] = useState([])
@@ -119,7 +119,7 @@ export default function Accounts({ selectedParentId }) {
   // Inline Email Save
   const handleStartInlineEdit = (acc) => {
     if (!canEdit) {
-      showToast('error', 'Role Magang hanya memiliki akses baca-saja.')
+      showToast('error', 'Role Viewer hanya memiliki akses baca-saja.')
       return
     }
     setInlineEditingId(acc.id)
@@ -143,7 +143,7 @@ export default function Accounts({ selectedParentId }) {
   // Edit Modal Save
   const handleOpenEditModal = (acc) => {
     if (!canEdit) {
-      showToast('error', 'Role Magang hanya memiliki akses baca-saja.')
+      showToast('error', 'Role Viewer hanya memiliki akses baca-saja.')
       return
     }
     setEditModalData({
@@ -291,7 +291,7 @@ export default function Accounts({ selectedParentId }) {
           </div>
         )}
 
-        {isMagang && (
+        {isViewer && (
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -305,7 +305,7 @@ export default function Accounts({ selectedParentId }) {
             border: '1px solid #e5e7eb'
           }}>
             <ShieldAlert size={14} />
-            <span>Mode Baca-Saja (Role Magang)</span>
+            <span>Mode Baca-Saja (Role Viewer)</span>
           </div>
         )}
       </div>

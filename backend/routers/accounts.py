@@ -79,10 +79,10 @@ def update_account(
     Mengupdate email, nama akun, atau akun induk untuk sub-account Starlink.
     Dapat digunakan untuk mengedit email dari luar.
     """
-    if current_user and current_user.role == "magang":
+    if current_user and current_user.role in ("viewer", "magang"):
         raise HTTPException(
             status_code=403,
-            detail="Role 'magang' hanya memiliki izin baca-saja dan tidak dapat mengedit akun."
+            detail="Role 'viewer' hanya memiliki izin baca-saja dan tidak dapat mengedit akun."
         )
 
     acc = db.query(Account).options(joinedload(Account.parent_account)).filter(Account.id == account_id).first()
@@ -125,10 +125,10 @@ def bulk_update_account_emails(
     Bulk update email untuk beberapa akun sekaligus dari luar.
     Menerima daftar nomor akun / id akun beserta alamat email barunya.
     """
-    if current_user and current_user.role == "magang":
+    if current_user and current_user.role in ("viewer", "magang"):
         raise HTTPException(
             status_code=403,
-            detail="Role 'magang' hanya memiliki izin baca-saja."
+            detail="Role 'viewer' hanya memiliki izin baca-saja."
         )
 
     updated = 0

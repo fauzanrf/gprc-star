@@ -8,17 +8,13 @@ import { useAuth } from '../contexts/AuthContext'
 import { ROLE_LABELS, ROLE_BADGE_STYLES } from '../lib/permissions'
 
 const AVAILABLE_ROLES = [
-  { value: 'super_admin',       label: 'Super Admin',       desc: 'Akses penuh ke seluruh sistem & manajemen pengguna' },
-  { value: 'noc2',              label: 'NOC 2',             desc: 'Akses operasional penuh & manajemen pengguna' },
-  { value: 'noc1',              label: 'NOC 1',             desc: 'Operasional teknis, scraping & edit akun' },
-  { value: 'technical_support', label: 'Technical Support', desc: 'Monitoring terminal & update email akun' },
-  { value: 'provisioning',      label: 'Provisioning',      desc: 'Provisioning perangkat & edit akun' },
-  { value: 'magang',            label: 'Magang',            desc: 'Mode baca-saja (Read-Only) tanpa izin ubah data' },
+  { value: 'admin',  label: 'Admin',  desc: 'Akses penuh ke seluruh sistem, pengelolaan user (ACL), akun, scraping, grup, dan konfigurasi' },
+  { value: 'viewer', label: 'Viewer', desc: 'Akses baca-saja (Read-Only) untuk melihat dashboard, daftar akun, terminal, dan monitoring' },
 ]
 
 export default function ManageACL() {
   const { session, role } = useAuth()
-  const isSuperAdminOrNoc2 = role === 'super_admin' || role === 'noc2'
+  const isAdmin = role === 'admin' || role === 'super_admin' || role === 'noc2'
 
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -26,7 +22,7 @@ export default function ManageACL() {
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', role: 'noc1' })
+  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', role: 'viewer' })
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -182,14 +178,14 @@ export default function ManageACL() {
           </p>
         </div>
 
-        {isSuperAdminOrNoc2 && (
+        {isAdmin && (
           <button
             type="button"
             className="btn btn-primary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, padding: '9px 18px' }}
             onClick={() => {
               setCreateError('')
-              setCreateForm({ name: '', email: '', password: '', role: 'noc1' })
+              setCreateForm({ name: '', email: '', password: '', role: 'viewer' })
               setShowCreateModal(true)
             }}
           >
@@ -216,21 +212,9 @@ export default function ManageACL() {
             <Shield size={22} />
           </div>
           <div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Super Admin</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Administrator</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: '#5e35b1' }}>
-              {users.filter(u => u.role === 'super_admin').length}
-            </div>
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#e0f2fe', color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <UserIcon size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>NOC & Support</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#0369a1' }}>
-              {users.filter(u => ['noc2', 'noc1', 'technical_support'].includes(u.role)).length}
+              {users.filter(u => u.role === 'admin' || u.role === 'super_admin' || u.role === 'noc2' || u.role === 'noc1').length}
             </div>
           </div>
         </div>
@@ -240,9 +224,9 @@ export default function ManageACL() {
             <ShieldAlert size={22} />
           </div>
           <div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Magang (Read-Only)</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Viewer (Read-Only)</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: '#4b5563' }}>
-              {users.filter(u => u.role === 'magang').length}
+              {users.filter(u => u.role === 'viewer' || u.role === 'magang').length}
             </div>
           </div>
         </div>
@@ -262,20 +246,20 @@ export default function ManageACL() {
                 <th>Pengguna</th>
                 <th>Role ACL</th>
                 <th>Bergabung Sejak</th>
-                {isSuperAdminOrNoc2 && <th style={{ width: 130, textAlign: 'center' }}>Aksi</th>}
+                {isAdmin && <th style={{ width: 130, textAlign: 'center' }}>Aksi</th>}
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={isSuperAdminOrNoc2 ? 5 : 4} style={{ textAlign: 'center', padding: '36px' }}>
+                  <td colSpan={isAdmin ? 5 : 4} style={{ textAlign: 'center', padding: '36px' }}>
                     <span className="spinner-dark" />
                   </td>
                 </tr>
               )}
               {!loading && users.length === 0 && (
                 <tr>
-                  <td colSpan={isSuperAdminOrNoc2 ? 5 : 4} className="empty-state">
+                  <td colSpan={isAdmin ? 5 : 4} className="empty-state">
                     Belum ada data pengguna terdaftar.
                   </td>
                 </tr>
@@ -336,7 +320,7 @@ export default function ManageACL() {
                         <Calendar size={13} /> {formatDate(u.created_at)}
                       </div>
                     </td>
-                    {isSuperAdminOrNoc2 && (
+                    {isAdmin && (
                       <td style={{ textAlign: 'center' }}>
                         <div style={{ display: 'inline-flex', gap: 6 }}>
                           <button

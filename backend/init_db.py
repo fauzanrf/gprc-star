@@ -48,19 +48,24 @@ for attempt in range(MAX_RETRIES):
                     conn.commit()
                     print(f"[DB] Linked existing sub-accounts to parent_id={parent_id}.", flush=True)
 
-            # Seed default ACL users if users table is empty
+            # Migrate users table role column to VARCHAR(50) and convert existing roles
+            try:
+                conn.execute(text("ALTER TABLE users MODIFY COLUMN role VARCHAR(50) NOT NULL DEFAULT 'viewer'"))
+                conn.execute(text("UPDATE users SET role = 'admin' WHERE role IN ('super_admin', 'noc2', 'noc1', 'provisioning', 'technical_support')"))
+                conn.execute(text("UPDATE users SET role = 'viewer' WHERE role IN ('magang') OR role NOT IN ('admin', 'viewer')"))
+                conn.commit()
+            except Exception as e:
+                print(f"[DB] Migration role column notice: {e}", flush=True)
+
+            # Seed default ACL users (admin & viewer)
             from auth_utils import hash_password
             res = conn.execute(text("SELECT COUNT(*) FROM users"))
             user_count = res.scalar() or 0
             if user_count == 0:
-                print("[DB] Seeding default ACL users from Nexcare...", flush=True)
+                print("[DB] Seeding default Admin & Viewer users...", flush=True)
                 default_users = [
-                    {"name": "Super Admin", "email": "admin@internetwork.net.id", "password": "admin", "role": "super_admin"},
-                    {"name": "Admin NOC2", "email": "noc2@internetwork.net.id", "password": "noc2", "role": "noc2"},
-                    {"name": "NOC One", "email": "noc1@internetwork.net.id", "password": "noc1", "role": "noc1"},
-                    {"name": "Tech Support", "email": "techsup@internetwork.net.id", "password": "techsup", "role": "technical_support"},
-                    {"name": "Intern User", "email": "magang@internetwork.net.id", "password": "magang", "role": "magang"},
-                    {"name": "Provisioning", "email": "provisioning@internetwork.net.id", "password": "provi", "role": "provisioning"},
+                    {"name": "Administrator", "email": "admin@internetwork.net.id", "password": "admin", "role": "admin"},
+                    {"name": "Viewer Monitoring", "email": "viewer@internetwork.net.id", "password": "viewer", "role": "viewer"},
                 ]
                 for u in default_users:
                     pwd_hash = hash_password(u["password"])
@@ -72,7 +77,20 @@ for attempt in range(MAX_RETRIES):
                         {"name": u["name"], "email": u["email"], "pwd": pwd_hash, "role": u["role"]}
                     )
                 conn.commit()
-                print(f"[DB] Seeded {len(default_users)} default users successfully.", flush=True)
+                print("[DB] Seeded default Admin & Viewer users successfully.", flush=True)
+            else:
+                # Ensure viewer user exists
+                res_viewer = conn.execute(text("SELECT id FROM users WHERE email = 'viewer@internetwork.net.id'"))
+                if not res_viewer.scalar():
+                    conn.execute(
+                        text("""
+                            INSERT INTO users (name, email, password_hash, role, created_at, updated_at)
+                            VALUES ('Viewer Monitoring', 'viewer@internetwork.net.id', :pwd, 'viewer', NOW(), NOW())
+                        """),
+                        {"pwd": hash_password("viewer")}
+                    )
+                    conn.commit()
+                    print("[DB] Added default viewer user.", flush=True)
 
         break
     except sqlalchemy.exc.OperationalError as e:
