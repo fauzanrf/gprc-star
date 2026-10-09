@@ -158,7 +158,7 @@ services:
     environment:
       PMA_HOST: mysql
       PMA_PORT: 3306
-      PMA_ABSOLUTE_URI: https://toolshift.internetwork.net.id:8282/
+      PMA_ABSOLUTE_URI: https://toolshift.internetwork.net.id/phpmyadmin/
       BLOWFISH_SECRET: Strl1nkDB2026_phpmyadmin_secret_key_32c
       UPLOAD_LIMIT: 128M
       MEMORY_LIMIT: 256M

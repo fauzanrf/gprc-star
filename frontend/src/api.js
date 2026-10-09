@@ -1,5 +1,7 @@
-const BASE = import.meta.env.VITE_API_URL || '/api'
-const WS_BASE = import.meta.env.VITE_WS_URL || (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host
+const isSubpath = window.location.pathname.startsWith('/starlink')
+const BASE = import.meta.env.VITE_API_URL || (isSubpath ? '/starlink/api' : '/api')
+const wsPrefix = isSubpath ? '/starlink' : ''
+const WS_BASE = import.meta.env.VITE_WS_URL || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + wsPrefix)
 
 export async function apiFetch(path, opts = {}) {
   const res = await fetch(`${BASE}${path}`, {
