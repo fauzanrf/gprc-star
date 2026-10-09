@@ -112,7 +112,8 @@ class SessionStatus(BaseModel):
 class GroupBase(BaseModel):
     name: str
     description: Optional[str] = None
-    quota_limit_gb: Optional[float] = 0.0
+    quota_limit_per_kit_gb: Optional[float] = 100.0  # Batas per KIT (default 100 GB)
+    quota_limit_gb: Optional[float] = 0.0          # Optional custom total limit
     color: Optional[str] = "#3b82f6"
 
 class GroupCreate(GroupBase):
@@ -121,6 +122,7 @@ class GroupCreate(GroupBase):
 class GroupUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    quota_limit_per_kit_gb: Optional[float] = None
     quota_limit_gb: Optional[float] = None
     color: Optional[str] = None
 
@@ -134,15 +136,25 @@ class GroupMemberOut(BaseModel):
     status: str
     quota: Optional[str] = None
     quota_gb: float = 0.0
+    limit_gb: float = 100.0
+    usage_percentage: float = 0.0
+    excess_gb: float = 0.0
+    alert_level: str = "normal"  # normal | near_limit | over_quota
     is_mini: bool = False
     added_at: Optional[datetime] = None
 
 class GroupOut(GroupBase):
     id: int
     member_count: int = 0
+    quota_limit_per_kit_gb: float = 100.0
+    total_allocation_gb: float = 0.0
+    total_allocation_formatted: str = "0.00 GB"
     total_quota_gb: float = 0.0
     total_quota_formatted: str = "0.00 GB"
-    usage_percentage: float = 0.0
+    overall_usage_percentage: float = 0.0
+    kits_over_limit: int = 0
+    kits_near_limit: int = 0
+    kits_safe: int = 0
     alert_level: str = "normal"  # normal | near_limit | over_quota
     active_kits: int = 0
     inactive_kits: int = 0

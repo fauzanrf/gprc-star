@@ -97,13 +97,14 @@ class SystemSetting(Base):
 class KitGroup(Base):
     __tablename__ = "kit_groups"
 
-    id             = Column(Integer, primary_key=True, autoincrement=True)
-    name           = Column(String(255), nullable=False)
-    description    = Column(Text, nullable=True)
-    quota_limit_gb = Column(Float, nullable=True, default=0.0)
-    color          = Column(String(50), default="#3b82f6")
-    created_at     = Column(DateTime, default=func.now())
-    updated_at     = Column(DateTime, default=func.now(), onupdate=func.now())
+    id                     = Column(Integer, primary_key=True, autoincrement=True)
+    name                   = Column(String(255), nullable=False)
+    description            = Column(Text, nullable=True)
+    quota_limit_per_kit_gb = Column(Float, nullable=True, default=100.0)
+    quota_limit_gb         = Column(Float, nullable=True, default=0.0)
+    color                  = Column(String(50), default="#3b82f6")
+    created_at             = Column(DateTime, default=func.now())
+    updated_at             = Column(DateTime, default=func.now(), onupdate=func.now())
 
     members        = relationship("KitGroupMember", back_populates="group", cascade="all, delete-orphan")
 

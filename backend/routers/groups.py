@@ -3,6 +3,7 @@ routers/groups.py
 =================
 API endpoints untuk manajemen Grouping KIT dan monitoring agregasi kuota
 (khususnya Starlink Mini dan kelompok armada/lokasi).
+Mendukung batas kuota per-KIT (default max 100 GB per KIT).
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -96,7 +97,7 @@ def detect_starlink_mini(db: Session = Depends(get_db)):
 
 @router.get("", response_model=List[GroupOut])
 def list_groups(db: Session = Depends(get_db)):
-    """Daftar semua group beserta statistik agregasi kuota dan member."""
+    """Daftar semua group beserta statistik agregasi kuota per-KIT."""
     groups = (
         db.query(KitGroup)
         .options(
@@ -112,40 +113,60 @@ def list_groups(db: Session = Depends(get_db)):
         total_quota_gb = 0.0
         active_kits = 0
         inactive_kits = 0
+        kits_over_limit = 0
+        kits_near_limit = 0
+        kits_safe = 0
+
+        limit_per_kit = g.quota_limit_per_kit_gb if g.quota_limit_per_kit_gb is not None and g.quota_limit_per_kit_gb > 0 else 100.0
 
         for m in g.members:
             if m.kit:
-                total_quota_gb += parse_quota_gb(m.kit.quota)
+                q_gb = parse_quota_gb(m.kit.quota)
+                total_quota_gb += q_gb
                 if m.kit.status == "active":
                     active_kits += 1
                 else:
                     inactive_kits += 1
 
-        total_quota_gb = round(total_quota_gb, 2)
-        limit_gb = g.quota_limit_gb or 0.0
+                if limit_per_kit > 0:
+                    if q_gb >= limit_per_kit:
+                        kits_over_limit += 1
+                    elif q_gb >= 0.8 * limit_per_kit:
+                        kits_near_limit += 1
+                    else:
+                        kits_safe += 1
 
-        if limit_gb > 0:
-            usage_pct = round((total_quota_gb / limit_gb) * 100.0, 1)
-            if usage_pct >= 100.0:
-                alert_level = "over_quota"
-            elif usage_pct >= 80.0:
-                alert_level = "near_limit"
-            else:
-                alert_level = "normal"
+        total_quota_gb = round(total_quota_gb, 2)
+        total_allocation_gb = round(member_count * limit_per_kit, 2)
+
+        if total_allocation_gb > 0:
+            overall_pct = round((total_quota_gb / total_allocation_gb) * 100.0, 1)
         else:
-            usage_pct = 0.0
+            overall_pct = 0.0
+
+        if kits_over_limit > 0:
+            alert_level = "over_quota"
+        elif kits_near_limit > 0:
+            alert_level = "near_limit"
+        else:
             alert_level = "normal"
 
         out = GroupOut(
             id=g.id,
             name=g.name,
             description=g.description,
-            quota_limit_gb=limit_gb,
+            quota_limit_per_kit_gb=limit_per_kit,
+            quota_limit_gb=g.quota_limit_gb or 0.0,
             color=g.color or "#3b82f6",
             member_count=member_count,
+            total_allocation_gb=total_allocation_gb,
+            total_allocation_formatted=format_quota(total_allocation_gb),
             total_quota_gb=total_quota_gb,
             total_quota_formatted=format_quota(total_quota_gb),
-            usage_percentage=usage_pct,
+            overall_usage_percentage=overall_pct,
+            kits_over_limit=kits_over_limit,
+            kits_near_limit=kits_near_limit,
+            kits_safe=kits_safe,
             alert_level=alert_level,
             active_kits=active_kits,
             inactive_kits=inactive_kits,
@@ -159,10 +180,12 @@ def list_groups(db: Session = Depends(get_db)):
 
 @router.post("", response_model=GroupDetailOut, status_code=status.HTTP_201_CREATED)
 def create_group(payload: GroupCreate, db: Session = Depends(get_db)):
-    """Buat group baru dan opsional langsung tambahkan daftar KIT anggota."""
+    """Buat group baru dengan batas kuota per-KIT (default 100 GB)."""
+    limit_per_kit = payload.quota_limit_per_kit_gb if payload.quota_limit_per_kit_gb is not None and payload.quota_limit_per_kit_gb > 0 else 100.0
     grp = KitGroup(
         name=payload.name.strip(),
         description=payload.description.strip() if payload.description else None,
+        quota_limit_per_kit_gb=limit_per_kit,
         quota_limit_gb=payload.quota_limit_gb or 0.0,
         color=payload.color or "#3b82f6",
     )
@@ -173,20 +196,18 @@ def create_group(payload: GroupCreate, db: Session = Depends(get_db)):
     if payload.initial_kit_ids:
         unique_ids = list(set(payload.initial_kit_ids))
         for kid in unique_ids:
-            # Pastikan kit ada
             kit_exists = db.query(Kit).filter(Kit.id == kid).first()
             if kit_exists:
                 db.add(KitGroupMember(group_id=grp.id, kit_id=kid))
 
     db.commit()
     db.refresh(grp)
-
     return get_group_detail(grp.id, db)
 
 
 @router.get("/{group_id}", response_model=GroupDetailOut)
 def get_group_detail(group_id: int, db: Session = Depends(get_db)):
-    """Detail group beserta daftar lengkap anggota KIT dan kuota masing-masing."""
+    """Detail group beserta daftar lengkap anggota KIT dan analisis kuota per-KIT (max 100 GB/kit)."""
     grp = (
         db.query(KitGroup)
         .filter(KitGroup.id == group_id)
@@ -204,6 +225,11 @@ def get_group_detail(group_id: int, db: Session = Depends(get_db)):
     total_quota_gb = 0.0
     active_kits = 0
     inactive_kits = 0
+    kits_over_limit = 0
+    kits_near_limit = 0
+    kits_safe = 0
+
+    limit_per_kit = grp.quota_limit_per_kit_gb if grp.quota_limit_per_kit_gb is not None and grp.quota_limit_per_kit_gb > 0 else 100.0
 
     for m in grp.members:
         if m.kit:
@@ -214,6 +240,24 @@ def get_group_detail(group_id: int, db: Session = Depends(get_db)):
                 active_kits += 1
             else:
                 inactive_kits += 1
+
+            if limit_per_kit > 0:
+                kit_pct = round((q_gb / limit_per_kit) * 100.0, 1)
+                excess = round(max(0.0, q_gb - limit_per_kit), 2)
+                if q_gb >= limit_per_kit:
+                    k_alert = "over_quota"
+                    kits_over_limit += 1
+                elif q_gb >= 0.8 * limit_per_kit:
+                    k_alert = "near_limit"
+                    kits_near_limit += 1
+                else:
+                    k_alert = "normal"
+                    kits_safe += 1
+            else:
+                kit_pct = 0.0
+                excess = 0.0
+                k_alert = "normal"
+                kits_safe += 1
 
             mini_flag = is_starlink_mini(k.sn, k.kit, k.site)
             members_out.append(
@@ -227,6 +271,10 @@ def get_group_detail(group_id: int, db: Session = Depends(get_db)):
                     status=k.status,
                     quota=k.quota or "-",
                     quota_gb=q_gb,
+                    limit_gb=limit_per_kit,
+                    usage_percentage=kit_pct,
+                    excess_gb=excess,
+                    alert_level=k_alert,
                     is_mini=mini_flag,
                     added_at=m.added_at,
                 )
@@ -235,30 +283,38 @@ def get_group_detail(group_id: int, db: Session = Depends(get_db)):
     # Sort anggota berdasarkan pemakaian kuota tertinggi
     members_out.sort(key=lambda x: x.quota_gb, reverse=True)
 
+    member_count = len(members_out)
     total_quota_gb = round(total_quota_gb, 2)
-    limit_gb = grp.quota_limit_gb or 0.0
-    if limit_gb > 0:
-        usage_pct = round((total_quota_gb / limit_gb) * 100.0, 1)
-        if usage_pct >= 100.0:
-            alert_level = "over_quota"
-        elif usage_pct >= 80.0:
-            alert_level = "near_limit"
-        else:
-            alert_level = "normal"
+    total_allocation_gb = round(member_count * limit_per_kit, 2)
+
+    if total_allocation_gb > 0:
+        overall_pct = round((total_quota_gb / total_allocation_gb) * 100.0, 1)
     else:
-        usage_pct = 0.0
+        overall_pct = 0.0
+
+    if kits_over_limit > 0:
+        alert_level = "over_quota"
+    elif kits_near_limit > 0:
+        alert_level = "near_limit"
+    else:
         alert_level = "normal"
 
     return GroupDetailOut(
         id=grp.id,
         name=grp.name,
         description=grp.description,
-        quota_limit_gb=limit_gb,
+        quota_limit_per_kit_gb=limit_per_kit,
+        quota_limit_gb=grp.quota_limit_gb or 0.0,
         color=grp.color or "#3b82f6",
-        member_count=len(members_out),
+        member_count=member_count,
+        total_allocation_gb=total_allocation_gb,
+        total_allocation_formatted=format_quota(total_allocation_gb),
         total_quota_gb=total_quota_gb,
         total_quota_formatted=format_quota(total_quota_gb),
-        usage_percentage=usage_pct,
+        overall_usage_percentage=overall_pct,
+        kits_over_limit=kits_over_limit,
+        kits_near_limit=kits_near_limit,
+        kits_safe=kits_safe,
         alert_level=alert_level,
         active_kits=active_kits,
         inactive_kits=inactive_kits,
@@ -270,7 +326,7 @@ def get_group_detail(group_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{group_id}", response_model=GroupDetailOut)
 def update_group(group_id: int, payload: GroupUpdate, db: Session = Depends(get_db)):
-    """Update informasi dasar group (nama, deskripsi, batas kuota, warna)."""
+    """Update informasi dasar group (nama, deskripsi, batas kuota per-KIT, warna)."""
     grp = db.query(KitGroup).filter(KitGroup.id == group_id).first()
     if not grp:
         raise HTTPException(status_code=404, detail="Group tidak ditemukan")
@@ -279,6 +335,8 @@ def update_group(group_id: int, payload: GroupUpdate, db: Session = Depends(get_
         grp.name = payload.name.strip()
     if payload.description is not None:
         grp.description = payload.description.strip()
+    if payload.quota_limit_per_kit_gb is not None:
+        grp.quota_limit_per_kit_gb = payload.quota_limit_per_kit_gb
     if payload.quota_limit_gb is not None:
         grp.quota_limit_gb = payload.quota_limit_gb
     if payload.color is not None:
@@ -310,14 +368,12 @@ def add_group_members(group_id: int, payload: AddMembersRequest, db: Session = D
 
     added_count = 0
     for kid in set(payload.kit_ids):
-        # Cek apakah sudah jadi member
         existing = (
             db.query(KitGroupMember)
             .filter(KitGroupMember.group_id == group_id, KitGroupMember.kit_id == kid)
             .first()
         )
         if not existing:
-            # Pastikan kit ada di DB
             kit_exists = db.query(Kit).filter(Kit.id == kid).first()
             if kit_exists:
                 db.add(KitGroupMember(group_id=group_id, kit_id=kid))
