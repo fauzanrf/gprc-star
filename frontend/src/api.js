@@ -57,3 +57,14 @@ export const saveWhatsAppConfig    = (data) => apiFetch('/whatsapp/config', { me
 export const sendWhatsAppTest      = (data = {}) => apiFetch('/whatsapp/test', { method: 'POST', body: JSON.stringify(data) })
 export const disconnectWhatsApp    = () => apiFetch('/whatsapp/disconnect', { method: 'POST' })
 export const reloadWhatsApp        = () => apiFetch('/whatsapp/reload', { method: 'POST' })
+
+// KIT Grouping & Quota Monitoring
+export const getGroups          = () => apiFetch('/groups')
+export const getGroupDetail     = (id) => apiFetch(`/groups/${id}`)
+export const createGroup        = (data) => apiFetch('/groups', { method: 'POST', body: JSON.stringify(data) })
+export const updateGroup        = (id, data) => apiFetch(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+export const deleteGroup        = (id) => apiFetch(`/groups/${id}`, { method: 'DELETE' })
+export const addGroupMembers    = (id, kitIds) => apiFetch(`/groups/${id}/members`, { method: 'POST', body: JSON.stringify({ kit_ids: kitIds }) })
+export const removeGroupMember  = (groupId, kitId) => apiFetch(`/groups/${groupId}/members/${kitId}`, { method: 'DELETE' })
+export const detectStarlinkMini = () => apiFetch('/groups/detect-mini')
+

@@ -2,7 +2,7 @@
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Enum, ForeignKey,
-    SmallInteger, func,
+    SmallInteger, Float, func,
 )
 from sqlalchemy.orm import relationship
 from database import Base
@@ -58,6 +58,7 @@ class Kit(Base):
     scraped_at         = Column(DateTime)
 
     account = relationship("Account", back_populates="kits")
+    group_memberships = relationship("KitGroupMember", back_populates="kit", cascade="all, delete-orphan")
 
 
 class ScrapeJob(Base):
@@ -91,3 +92,30 @@ class SystemSetting(Base):
     key        = Column(String(100), primary_key=True)
     value      = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class KitGroup(Base):
+    __tablename__ = "kit_groups"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    name           = Column(String(255), nullable=False)
+    description    = Column(Text, nullable=True)
+    quota_limit_gb = Column(Float, nullable=True, default=0.0)
+    color          = Column(String(50), default="#3b82f6")
+    created_at     = Column(DateTime, default=func.now())
+    updated_at     = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    members        = relationship("KitGroupMember", back_populates="group", cascade="all, delete-orphan")
+
+
+class KitGroupMember(Base):
+    __tablename__ = "kit_group_members"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    group_id   = Column(Integer, ForeignKey("kit_groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    kit_id     = Column(Integer, ForeignKey("kits.id", ondelete="CASCADE"), nullable=False, index=True)
+    added_at   = Column(DateTime, default=func.now())
+
+    group      = relationship("KitGroup", back_populates="members")
+    kit        = relationship("Kit", back_populates="group_memberships")
+

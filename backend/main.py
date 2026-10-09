@@ -5,7 +5,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, accounts, kits, scrape, dashboard, parent_accounts, whatsapp
+from routers import auth, accounts, kits, scrape, dashboard, parent_accounts, whatsapp, groups
 
 app = FastAPI(
     title="Starlink GPRC Dashboard API",
@@ -22,6 +22,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_headers_to_expose=["*"],
 )
 
 # Include routers
@@ -29,6 +30,7 @@ app.include_router(auth.router)
 app.include_router(parent_accounts.router)
 app.include_router(accounts.router)
 app.include_router(kits.router)
+app.include_router(groups.router)
 app.include_router(scrape.router)
 app.include_router(dashboard.router)
 app.include_router(whatsapp.router)

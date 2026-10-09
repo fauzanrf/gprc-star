@@ -106,3 +106,55 @@ class LoginRequest(BaseModel):
 class SessionStatus(BaseModel):
     is_valid: bool
     updated_at: Optional[datetime]
+
+
+# ── KIT Grouping & Quota Monitoring ──────────────────────────────────────────
+class GroupBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    quota_limit_gb: Optional[float] = 0.0
+    color: Optional[str] = "#3b82f6"
+
+class GroupCreate(GroupBase):
+    initial_kit_ids: Optional[List[int]] = []
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    quota_limit_gb: Optional[float] = None
+    color: Optional[str] = None
+
+class GroupMemberOut(BaseModel):
+    kit_id: int
+    account_name: Optional[str] = None
+    account_number: Optional[str] = None
+    site: Optional[str] = None
+    kit: Optional[str] = None
+    sn: Optional[str] = None
+    status: str
+    quota: Optional[str] = None
+    quota_gb: float = 0.0
+    is_mini: bool = False
+    added_at: Optional[datetime] = None
+
+class GroupOut(GroupBase):
+    id: int
+    member_count: int = 0
+    total_quota_gb: float = 0.0
+    total_quota_formatted: str = "0.00 GB"
+    usage_percentage: float = 0.0
+    alert_level: str = "normal"  # normal | near_limit | over_quota
+    active_kits: int = 0
+    inactive_kits: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class GroupDetailOut(GroupOut):
+    members: List[GroupMemberOut] = []
+
+class AddMembersRequest(BaseModel):
+    kit_ids: List[int]
+

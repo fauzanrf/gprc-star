@@ -3,11 +3,12 @@ import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Monitor, Users, RefreshCw, LogIn, Building2,
   QrCode, ExternalLink, ShieldCheck, ChevronRight, MessageSquare,
-  PanelLeftClose, PanelLeftOpen, Menu, X
+  PanelLeftClose, PanelLeftOpen, Menu, X, Layers
 } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Kits from './pages/Kits'
 import Accounts from './pages/Accounts'
+import Groups from './pages/Groups'
 import Scraping from './pages/Scraping'
 import LoginPage from './pages/Login'
 import ParentAccounts from './pages/ParentAccounts'
@@ -26,6 +27,7 @@ const NAV_GROUPS = [
     title: 'MANAGEMENT',
     items: [
       { to: '/parent-accounts', icon: Building2, label: 'Akun Induk' },
+      { to: '/groups', icon: Layers, label: 'Grouping & Kuota' },
       { to: '/kits', icon: Monitor, label: 'KIT / Terminal' },
       { to: '/accounts', icon: Users, label: 'Accounts' },
       { to: '/scraping', icon: RefreshCw, label: 'Scraping Control' },
@@ -88,6 +90,7 @@ export default function App() {
   const findCurrentTitle = () => {
     if (location.pathname === '/') return 'Dashboard'
     if (location.pathname.startsWith('/parent-accounts')) return 'Manajemen Akun Induk'
+    if (location.pathname.startsWith('/groups')) return 'Grouping & Kuota KIT'
     if (location.pathname.startsWith('/kits')) return 'KIT / Terminal'
     if (location.pathname.startsWith('/accounts')) return 'Accounts'
     if (location.pathname.startsWith('/scraping')) return 'Scraping Control'
@@ -252,6 +255,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Dashboard selectedParentId={selectedParentId} />} />
               <Route path="/parent-accounts" element={<ParentAccounts />} />
+              <Route path="/groups" element={<Groups />} />
               <Route path="/kits" element={<Kits selectedParentId={selectedParentId} />} />
               <Route path="/accounts" element={<Accounts selectedParentId={selectedParentId} />} />
               <Route path="/scraping" element={<Scraping />} />
