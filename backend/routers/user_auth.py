@@ -1,6 +1,6 @@
 """
 user_auth.py — User Authentication & ACL (Access Control List) Router
-Provides login, session verification, and user management matching Nexcare RBAC.
+Provides login, session verification, and user management with Role-Based Access Control.
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status

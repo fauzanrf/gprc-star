@@ -174,7 +174,7 @@ export default function ManageACL() {
         <div>
           <h1 className="page-title">Manajemen ACL & Pengguna</h1>
           <p className="page-subtitle">
-            Kelola hak akses peran (Role-Based Access Control) dan akun pengguna NEXCARE Starlink
+            Kelola hak akses peran (Role-Based Access Control) dan akun pengguna Starlink GPRC
           </p>
         </div>
 

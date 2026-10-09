@@ -4,7 +4,7 @@ const wsPrefix = isSubpath ? '/starlink' : ''
 const WS_BASE = import.meta.env.VITE_WS_URL || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + wsPrefix)
 
 // ── Token Management ──────────────────────────────────────────────────────────
-const TOKEN_KEY = 'starlink_nexcare_token'
+const TOKEN_KEY = 'starlink_auth_token'
 
 export function getAccessToken() {
   return localStorage.getItem(TOKEN_KEY)

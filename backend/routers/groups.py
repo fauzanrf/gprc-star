@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 
 from database import get_db
-from models import Kit, Account, KitGroup, KitGroupMember
+from models import Kit, Account, KitGroup, KitGroupMember, User
+from auth_utils import require_roles
 from schemas import (
     GroupOut, GroupDetailOut, GroupCreate, GroupUpdate,
     GroupMemberOut, AddMembersRequest
@@ -179,8 +180,12 @@ def list_groups(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=GroupDetailOut, status_code=status.HTTP_201_CREATED)
-def create_group(payload: GroupCreate, db: Session = Depends(get_db)):
-    """Buat group baru dengan batas kuota per-KIT (default 100 GB)."""
+def create_group(
+    payload: GroupCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "super_admin")),
+):
+    """Buat group baru dengan batas kuota per-KIT (default 100 GB). Restricted to Admin."""
     limit_per_kit = payload.quota_limit_per_kit_gb if payload.quota_limit_per_kit_gb is not None and payload.quota_limit_per_kit_gb > 0 else 100.0
     grp = KitGroup(
         name=payload.name.strip(),
@@ -325,8 +330,13 @@ def get_group_detail(group_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{group_id}", response_model=GroupDetailOut)
-def update_group(group_id: int, payload: GroupUpdate, db: Session = Depends(get_db)):
-    """Update informasi dasar group (nama, deskripsi, batas kuota per-KIT, warna)."""
+def update_group(
+    group_id: int,
+    payload: GroupUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "super_admin")),
+):
+    """Update informasi dasar group (nama, deskripsi, batas kuota per-KIT, warna). Restricted to Admin."""
     grp = db.query(KitGroup).filter(KitGroup.id == group_id).first()
     if not grp:
         raise HTTPException(status_code=404, detail="Group tidak ditemukan")
@@ -348,8 +358,12 @@ def update_group(group_id: int, payload: GroupUpdate, db: Session = Depends(get_
 
 
 @router.delete("/{group_id}")
-def delete_group(group_id: int, db: Session = Depends(get_db)):
-    """Hapus group beserta relasi anggotanya (tidak menghapus data KIT)."""
+def delete_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "super_admin")),
+):
+    """Hapus group beserta relasi anggotanya (tidak menghapus data KIT). Restricted to Admin."""
     grp = db.query(KitGroup).filter(KitGroup.id == group_id).first()
     if not grp:
         raise HTTPException(status_code=404, detail="Group tidak ditemukan")
@@ -360,8 +374,13 @@ def delete_group(group_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{group_id}/members")
-def add_group_members(group_id: int, payload: AddMembersRequest, db: Session = Depends(get_db)):
-    """Tambahkan satu atau beberapa KIT ke dalam group."""
+def add_group_members(
+    group_id: int,
+    payload: AddMembersRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "super_admin")),
+):
+    """Tambahkan satu atau beberapa KIT ke dalam group. Restricted to Admin."""
     grp = db.query(KitGroup).filter(KitGroup.id == group_id).first()
     if not grp:
         raise HTTPException(status_code=404, detail="Group tidak ditemukan")
@@ -384,8 +403,13 @@ def add_group_members(group_id: int, payload: AddMembersRequest, db: Session = D
 
 
 @router.delete("/{group_id}/members/{kit_id}")
-def remove_group_member(group_id: int, kit_id: int, db: Session = Depends(get_db)):
-    """Keluarkan KIT dari group."""
+def remove_group_member(
+    group_id: int,
+    kit_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "super_admin")),
+):
+    """Keluarkan KIT dari group. Restricted to Admin."""
     member = (
         db.query(KitGroupMember)
         .filter(KitGroupMember.group_id == group_id, KitGroupMember.kit_id == kit_id)

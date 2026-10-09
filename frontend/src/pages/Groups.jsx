@@ -9,6 +9,7 @@ import {
   getGroups, getGroupDetail, createGroup, updateGroup, deleteGroup,
   addGroupMembers, removeGroupMember, detectStarlinkMini, getKits
 } from '../api'
+import { useAuth } from '../contexts/AuthContext'
 
 const COLOR_PRESETS = [
   { name: 'Cyan Blue', hex: '#0284c7', bg: 'rgba(2, 132, 199, 0.12)' },
@@ -20,6 +21,10 @@ const COLOR_PRESETS = [
 ]
 
 export default function Groups() {
+  const { session, role } = useAuth()
+  const isAdmin = role === 'admin' || role === 'super_admin'
+  const isViewer = !isAdmin
+
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -78,6 +83,10 @@ export default function Groups() {
   }, [])
 
   const handleOpenCreateModal = (presetName = '', presetDesc = '', presetLimit = '100', presetColor = '#0284c7', initialIds = []) => {
+    if (isViewer) {
+      alert('Role Viewer hanya memiliki akses baca-saja.')
+      return
+    }
     setEditingGroup(null)
     setGroupForm({
       name: presetName,
@@ -90,6 +99,10 @@ export default function Groups() {
   }
 
   const handleOpenEditModal = (grp) => {
+    if (isViewer) {
+      alert('Role Viewer hanya memiliki akses baca-saja.')
+      return
+    }
     setEditingGroup(grp)
     setGroupForm({
       name: grp.name,
@@ -102,6 +115,10 @@ export default function Groups() {
 
   const handleSaveGroup = async (e) => {
     e.preventDefault()
+    if (isViewer) {
+      alert('Role Viewer hanya memiliki akses baca-saja.')
+      return
+    }
     if (!groupForm.name.trim()) return
     setSavingGroup(true)
     try {
@@ -130,6 +147,10 @@ export default function Groups() {
   }
 
   const handleDeleteGroup = async (grp) => {
+    if (isViewer) {
+      alert('Role Viewer hanya memiliki akses baca-saja.')
+      return
+    }
     if (!window.confirm(`Yakin ingin menghapus group "${grp.name}"? Data KIT di Starlink tidak akan terhapus.`)) return
     try {
       await deleteGroup(grp.id)
@@ -173,6 +194,10 @@ export default function Groups() {
   }
 
   const handleRemoveMember = async (kitId) => {
+    if (isViewer) {
+      alert('Role Viewer hanya memiliki akses baca-saja.')
+      return
+    }
     if (!activeGroupDetail) return
     try {
       await removeGroupMember(activeGroupDetail.id, kitId)
@@ -185,6 +210,10 @@ export default function Groups() {
   }
 
   const handleAddSelectedMembers = async () => {
+    if (isViewer) {
+      alert('Role Viewer hanya memiliki akses baca-saja.')
+      return
+    }
     if (!activeGroupDetail || selectedKitIds.length === 0) return
     setAddingMembers(true)
     try {
@@ -201,6 +230,10 @@ export default function Groups() {
   }
 
   const handleOneClickCreateMiniGroup = async () => {
+    if (isViewer) {
+      alert('Role Viewer hanya memiliki akses baca-saja.')
+      return
+    }
     if (!miniData || miniData.kits.length === 0) return
     const ids = miniData.kits.map(k => k.id)
     handleOpenCreateModal(
@@ -324,24 +357,45 @@ export default function Groups() {
             </button>
           )}
 
-          {/* Create Group Button */}
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => handleOpenCreateModal()}
-            style={{
+          {/* Read-Only Badge for Viewer */}
+          {isViewer && (
+            <div style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 8,
-              padding: '10px 18px',
+              gap: 6,
+              background: '#f3f4f6',
+              color: '#6b7280',
+              padding: '8px 14px',
               borderRadius: 10,
-              fontWeight: 700,
-              boxShadow: '0 4px 14px rgba(99, 102, 241, 0.28)'
-            }}
-          >
-            <Plus size={18} />
-            <span>Buat Group Baru</span>
-          </button>
+              fontSize: 12.5,
+              fontWeight: 600,
+              border: '1px solid #e5e7eb'
+            }}>
+              <ShieldAlert size={15} />
+              <span>Mode Baca-Saja (Role Viewer)</span>
+            </div>
+          )}
+
+          {/* Create Group Button */}
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => handleOpenCreateModal()}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 18px',
+                borderRadius: 10,
+                fontWeight: 700,
+                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.28)'
+              }}
+            >
+              <Plus size={18} />
+              <span>Buat Group Baru</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -653,51 +707,53 @@ export default function Groups() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditModal(grp)}
-                      title="Edit Group"
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        padding: 6,
-                        borderRadius: 8,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        transition: 'background 0.15s ease'
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.background = 'var(--bg-canvas)'
-                        e.currentTarget.style.color = 'var(--text-primary)'
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.color = 'var(--text-muted)'
-                      }}
-                    >
-                      <Edit2 size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteGroup(grp)}
-                      title="Hapus Group"
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#ef4444',
-                        padding: 6,
-                        borderRadius: 8,
-                        cursor: 'pointer',
-                        display: 'flex'
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
+                  {isAdmin && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditModal(grp)}
+                        title="Edit Group"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          padding: 6,
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'var(--bg-canvas)'
+                          e.currentTarget.style.color = 'var(--text-primary)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'transparent'
+                          e.currentTarget.style.color = 'var(--text-muted)'
+                        }}
+                      >
+                        <Edit2 size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteGroup(grp)}
+                        title="Hapus Group"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          padding: 6,
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          display: 'flex'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Description */}
@@ -855,7 +911,7 @@ export default function Groups() {
                       e.currentTarget.style.background = '#ffffff'
                     }}
                   >
-                    <span>Kelola Anggota & Rincian Kuota ({grp.member_count})</span>
+                    <span>{isViewer ? 'Lihat Anggota & Rincian Kuota' : 'Kelola Anggota & Rincian Kuota'} ({grp.member_count})</span>
                     <ArrowRight size={15} />
                   </button>
                 </div>
@@ -1152,23 +1208,25 @@ export default function Groups() {
                   {miniData.total_quota_formatted}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleOneClickCreateMiniGroup}
-                className="btn btn-primary"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  padding: '9px 18px',
-                  borderRadius: 10
-                }}
-              >
-                <Sparkles size={16} />
-                <span>Buat Group Starlink Mini (100GB/KIT)</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleOneClickCreateMiniGroup}
+                  className="btn btn-primary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    padding: '9px 18px',
+                    borderRadius: 10
+                  }}
+                >
+                  <Sparkles size={16} />
+                  <span>Buat Group Starlink Mini (100GB/KIT)</span>
+                </button>
+              )}
             </div>
 
             {/* List Mini Detected */}
@@ -1317,14 +1375,15 @@ export default function Groups() {
             {/* Modal Body */}
             <div style={{ overflowY: 'auto', padding: '24px 26px', flex: 1 }}>
 
-              {/* ── Add Members Box ────────────────────────────── */}
-              <div style={{
-                background: 'var(--bg-canvas, #f8fafc)',
-                border: '1px solid var(--border)',
-                borderRadius: 16,
-                padding: '18px 20px',
-                marginBottom: 24
-              }}>
+              {/* ── Add Members Box (Admin Only) ──────────────── */}
+              {isAdmin && (
+                <div style={{
+                  background: 'var(--bg-canvas, #f8fafc)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 16,
+                  padding: '18px 20px',
+                  marginBottom: 24
+                }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>
                     + Tambahkan Terminal KIT ke dalam Group
@@ -1470,6 +1529,7 @@ export default function Groups() {
                   </div>
                 )}
               </div>
+              )}
 
               {/* ── Current Group Members Table with 100GB Analysis ──── */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -1507,7 +1567,7 @@ export default function Groups() {
                         <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 700 }}>Tipe</th>
                         <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700 }}>Pemakaian Kuota</th>
                         <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 700, width: 220 }}>Status Limit ({activeGroupDetail.quota_limit_per_kit_gb || 100} GB)</th>
-                        <th style={{ padding: '12px 14px', textAlign: 'center', width: 60, fontWeight: 700 }}>Aksi</th>
+                        {isAdmin && <th style={{ padding: '12px 14px', textAlign: 'center', width: 60, fontWeight: 700 }}>Aksi</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1598,26 +1658,28 @@ export default function Groups() {
                             </td>
 
                             {/* Action */}
-                            <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveMember(m.kit_id)}
-                                title="Keluarkan dari group"
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: '#ef4444',
-                                  cursor: 'pointer',
-                                  padding: 6,
-                                  borderRadius: 6,
-                                  display: 'inline-flex'
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </td>
+                            {isAdmin && (
+                              <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMember(m.kit_id)}
+                                  title="Keluarkan dari group"
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#ef4444',
+                                    cursor: 'pointer',
+                                    padding: 6,
+                                    borderRadius: 6,
+                                    display: 'inline-flex'
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         )
                       })}

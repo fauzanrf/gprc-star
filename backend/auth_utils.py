@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-JWT_SECRET = os.getenv("JWT_SECRET", "strl1nk_nexcare_jwt_secret_2026_pt_internetwork_indonesia!")
+JWT_SECRET = os.getenv("JWT_SECRET", "strl1nk_gprc_jwt_secret_2026_pt_internetwork_indonesia!")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_SECONDS = 7 * 24 * 3600  # 7 days
 

@@ -1652,9 +1652,9 @@ td.mono {
 }
 
 /* ─────────────────────────────────────────────────────────────
- * NEXCARE LOGIN PAGE & AUTH NOTIFICATION (Aesthetic from Nexcare)
+ * AUTH LOGIN PAGE & NOTIFICATION (Modern Clean Aesthetic)
  * ───────────────────────────────────────────────────────────── */
-.nexcare-login-wrapper {
+.auth-login-wrapper {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -1666,18 +1666,18 @@ td.mono {
   overflow: hidden;
 }
 
-.nexcare-login-container {
+.auth-login-container {
   width: 100%;
   max-width: 440px;
   z-index: 10;
 }
 
-.nexcare-login-header {
+.auth-login-header {
   text-align: center;
   margin-bottom: 28px;
 }
 
-.nexcare-logo-wrap {
+.auth-logo-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1692,17 +1692,17 @@ td.mono {
   transition: transform 0.3s ease;
 }
 
-.nexcare-logo-wrap:hover {
+.auth-logo-wrap:hover {
   transform: translateY(-2px) scale(1.03);
 }
 
-.nexcare-logo-img {
+.auth-logo-img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
-.nexcare-login-title {
+.auth-login-title {
   font-size: 26px;
   font-weight: 800;
   color: #1e1b4b;
@@ -1710,13 +1710,13 @@ td.mono {
   margin-bottom: 6px;
 }
 
-.nexcare-login-subtitle {
+.auth-login-subtitle {
   font-size: 14px;
   color: #64748b;
   font-weight: 500;
 }
 
-.nexcare-login-card {
+.auth-login-card {
   background: #ffffff;
   border-radius: 20px;
   padding: 32px;
@@ -1724,13 +1724,13 @@ td.mono {
   border: 1px solid #f1f5f9;
 }
 
-.nexcare-login-form {
+.auth-login-form {
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-.nexcare-error-banner {
+.auth-error-banner {
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #dc2626;
@@ -1741,25 +1741,25 @@ td.mono {
   animation: fadeIn 0.2s ease;
 }
 
-.nexcare-field-group {
+.auth-field-group {
   display: flex;
   flex-direction: column;
   gap: 7px;
 }
 
-.nexcare-field-label {
+.auth-field-label {
   font-size: 13px;
   font-weight: 600;
   color: #334155;
 }
 
-.nexcare-input-box {
+.auth-input-box {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.nexcare-input-icon {
+.auth-input-icon {
   position: absolute;
   left: 14px;
   color: #94a3b8;
@@ -1768,7 +1768,7 @@ td.mono {
   pointer-events: none;
 }
 
-.nexcare-input {
+.auth-input {
   width: 100%;
   padding: 12px 14px 12px 42px;
   font-size: 14px;
@@ -1781,12 +1781,12 @@ td.mono {
   font-family: inherit;
 }
 
-.nexcare-input:focus {
+.auth-input:focus {
   border-color: #7c3aed;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
 }
 
-.nexcare-eye-btn {
+.auth-eye-btn {
   position: absolute;
   right: 12px;
   background: transparent;
@@ -1800,18 +1800,18 @@ td.mono {
   transition: color 0.15s ease;
 }
 
-.nexcare-eye-btn:hover {
+.auth-eye-btn:hover {
   color: #475569;
 }
 
-.nexcare-form-row {
+.auth-form-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
 }
 
-.nexcare-checkbox-label {
+.auth-checkbox-label {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1820,26 +1820,26 @@ td.mono {
   user-select: none;
 }
 
-.nexcare-checkbox {
+.auth-checkbox {
   width: 16px;
   height: 16px;
   accent-color: #7c3aed;
   cursor: pointer;
 }
 
-.nexcare-forgot-link {
+.auth-forgot-link {
   color: #7c3aed;
   font-weight: 600;
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
-.nexcare-forgot-link:hover {
+.auth-forgot-link:hover {
   color: #6d28d9;
   text-decoration: underline;
 }
 
-.nexcare-submit-btn {
+.auth-submit-btn {
   width: 100%;
   display: flex;
   align-items: center;
@@ -1857,84 +1857,32 @@ td.mono {
   transition: all 0.2s ease;
 }
 
-.nexcare-submit-btn:hover:not(:disabled) {
+.auth-submit-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
   box-shadow: 0 6px 20px rgba(109, 40, 217, 0.45);
   transform: translateY(-1px);
 }
 
-.nexcare-submit-btn:disabled {
+.auth-submit-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
 }
 
-.nexcare-arrow-icon {
+.auth-arrow-icon {
   transition: transform 0.2s ease;
 }
 
-.nexcare-submit-btn:hover:not(:disabled) .nexcare-arrow-icon {
+.auth-submit-btn:hover:not(:disabled) .auth-arrow-icon {
   transform: translateX(3px);
 }
 
-/* Quick Demo Role Picker */
-.nexcare-demo-box {
-  margin-top: 24px;
-  padding: 14px;
-  background: #f8fafc;
-  border: 1px dashed #cbd5e1;
-  border-radius: 12px;
-}
-
-.nexcare-demo-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-bottom: 10px;
-}
-
-.nexcare-demo-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.nexcare-demo-chip {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 4px 9px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #334155;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.nexcare-demo-chip:hover {
-  background: #ede7f6;
-  color: #5e35b1;
-  border-color: #b39ddb;
-  transform: translateY(-1px);
-}
-
-.nexcare-demo-chip.active {
-  background: #5e35b1;
-  color: #ffffff;
-  border-color: #5e35b1;
-}
-
-.nexcare-divider-section {
+.auth-divider-section {
   position: relative;
   margin-top: 24px;
   text-align: center;
 }
 
-.nexcare-divider-line {
+.auth-divider-line {
   position: absolute;
   top: 50%;
   left: 0;
@@ -1942,7 +1890,7 @@ td.mono {
   border-top: 1px solid #e2e8f0;
 }
 
-.nexcare-divider-badge {
+.auth-divider-badge {
   position: relative;
   display: inline-block;
   background: #ffffff;

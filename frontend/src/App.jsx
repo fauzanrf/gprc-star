@@ -131,7 +131,7 @@ export default function App() {
           animation: 'spin 0.8s linear infinite'
         }} />
         <p style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>
-          Memuat sesi NEXCARE...
+          Memuat sesi Starlink GPRC...
         </p>
       </div>
     )
@@ -180,7 +180,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* User Card in Sidebar (Nexcare style) */}
+        {/* User Profile Card in Sidebar */}
         {!sidebarCollapsed && (
           <div style={{
             margin: '12px 14px 4px',

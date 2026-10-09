@@ -27,7 +27,6 @@ export default function LoginPage() {
         setError(loginError.message)
         setIsLoading(false)
       } else {
-        // Show success notification matching Nexcare
         setShowNotification(true)
         setTimeout(() => {
           navigate('/')
@@ -40,42 +39,42 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="nexcare-login-wrapper">
+    <div className="auth-login-wrapper">
       <AuthNotification
         isVisible={showNotification}
         type="login"
         message={`Signing in as ${email}...`}
       />
 
-      <div className="nexcare-login-container">
+      <div className="auth-login-container">
         {/* Header */}
-        <div className="nexcare-login-header">
-          <div className="nexcare-logo-wrap">
-            <img src={logoImg} alt="Logo" className="nexcare-logo-img" />
+        <div className="auth-login-header">
+          <div className="auth-logo-wrap">
+            <img src={logoImg} alt="Logo" className="auth-logo-img" />
           </div>
-          <h2 className="nexcare-login-title">
-            Welcome to NEXCARE
+          <h2 className="auth-login-title">
+            Welcome to Starlink GPRC
           </h2>
-          <p className="nexcare-login-subtitle">
+          <p className="auth-login-subtitle">
             Sign in to access your Starlink Monitoring dashboard
           </p>
         </div>
 
         {/* Card */}
-        <div className="nexcare-login-card">
-          <form className="nexcare-login-form" onSubmit={handleLogin}>
+        <div className="auth-login-card">
+          <form className="auth-login-form" onSubmit={handleLogin}>
             {error && (
-              <div className="nexcare-error-banner">
+              <div className="auth-error-banner">
                 {error}
               </div>
             )}
 
-            <div className="nexcare-field-group">
-              <label htmlFor="email" className="nexcare-field-label">
+            <div className="auth-field-group">
+              <label htmlFor="email" className="auth-field-label">
                 Email address
               </label>
-              <div className="nexcare-input-box">
-                <div className="nexcare-input-icon">
+              <div className="auth-input-box">
+                <div className="auth-input-icon">
                   <Mail size={18} />
                 </div>
                 <input
@@ -86,18 +85,18 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="nexcare-input"
+                  className="auth-input"
                   placeholder="you@internetwork.net.id"
                 />
               </div>
             </div>
 
-            <div className="nexcare-field-group">
-              <label htmlFor="password" className="nexcare-field-label">
+            <div className="auth-field-group">
+              <label htmlFor="password" className="auth-field-label">
                 Password
               </label>
-              <div className="nexcare-input-box">
-                <div className="nexcare-input-icon">
+              <div className="auth-input-box">
+                <div className="auth-input-icon">
                   <Lock size={18} />
                 </div>
                 <input
@@ -108,13 +107,13 @@ export default function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="nexcare-input"
+                  className="auth-input"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="nexcare-eye-btn"
+                  className="auth-eye-btn"
                   title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -122,22 +121,22 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="nexcare-form-row">
-              <label className="nexcare-checkbox-label">
+            <div className="auth-form-row">
+              <label className="auth-checkbox-label">
                 <input
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
                   defaultChecked
-                  className="nexcare-checkbox"
+                  className="auth-checkbox"
                 />
                 <span>Remember me</span>
               </label>
 
               <a
                 href="#forgot"
-                onClick={(e) => { e.preventDefault(); setError('Silakan hubungi Super Admin untuk reset password.'); }}
-                className="nexcare-forgot-link"
+                onClick={(e) => { e.preventDefault(); setError('Silakan hubungi Administrator untuk reset password.'); }}
+                className="auth-forgot-link"
               >
                 Forgot password?
               </a>
@@ -147,7 +146,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="nexcare-submit-btn"
+                className="auth-submit-btn"
               >
                 {isLoading ? (
                   <>
@@ -157,16 +156,16 @@ export default function LoginPage() {
                 ) : (
                   <>
                     <span>Sign in</span>
-                    <ArrowRight size={18} className="nexcare-arrow-icon" />
+                    <ArrowRight size={18} className="auth-arrow-icon" />
                   </>
                 )}
               </button>
             </div>
           </form>
 
-          <div className="nexcare-divider-section">
-            <div className="nexcare-divider-line" />
-            <div className="nexcare-divider-badge">
+          <div className="auth-divider-section">
+            <div className="auth-divider-line" />
+            <div className="auth-divider-badge">
               PT InternetWork Indonesia
             </div>
           </div>
