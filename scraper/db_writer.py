@@ -25,22 +25,29 @@ def _get_conn():
     )
 
 
-def upsert_account(conn, account_number: str, account_name: str, parent_account_id: int = None) -> int:
+def upsert_account(conn, account_number: str, account_name: str, parent_account_id: int = None, email: str = None) -> int:
     """Insert atau update akun, return account.id."""
     with conn.cursor() as cur:
         if parent_account_id:
             cur.execute(
-                """INSERT INTO accounts (account_number, account_name, parent_account_id)
-                   VALUES (%s, %s, %s)
-                   ON DUPLICATE KEY UPDATE account_name = VALUES(account_name), parent_account_id = VALUES(parent_account_id), updated_at = NOW()""",
-                (account_number, account_name, parent_account_id),
+                """INSERT INTO accounts (account_number, account_name, parent_account_id, email)
+                   VALUES (%s, %s, %s, %s)
+                   ON DUPLICATE KEY UPDATE 
+                     account_name = VALUES(account_name), 
+                     parent_account_id = VALUES(parent_account_id),
+                     email = COALESCE(VALUES(email), email),
+                     updated_at = NOW()""",
+                (account_number, account_name, parent_account_id, email),
             )
         else:
             cur.execute(
-                """INSERT INTO accounts (account_number, account_name)
-                   VALUES (%s, %s)
-                   ON DUPLICATE KEY UPDATE account_name = VALUES(account_name), updated_at = NOW()""",
-                (account_number, account_name),
+                """INSERT INTO accounts (account_number, account_name, email)
+                   VALUES (%s, %s, %s)
+                   ON DUPLICATE KEY UPDATE 
+                     account_name = VALUES(account_name), 
+                     email = COALESCE(VALUES(email), email),
+                     updated_at = NOW()""",
+                (account_number, account_name, email),
             )
         cur.execute("SELECT id FROM accounts WHERE account_number = %s", (account_number,))
         row = cur.fetchone()
@@ -100,7 +107,10 @@ def save_rows_to_db(rows: list[dict], parent_account_id: int = None):
     try:
         conn.begin()
         for row in rows:
-            acc_id = upsert_account(conn, row["code"], row["controller"], parent_account_id)
+            acc_email = row.get("email")
+            if acc_email in ("-", "None", "null", ""):
+                acc_email = None
+            acc_id = upsert_account(conn, row["code"], row["controller"], parent_account_id, email=acc_email)
             if upsert_kit(conn, acc_id, row):
                 saved_kits += 1
         conn.commit()

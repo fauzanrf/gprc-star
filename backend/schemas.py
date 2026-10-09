@@ -50,6 +50,7 @@ class KitOut(BaseModel):
     account_id: int
     account_number: Optional[str] = None
     account_name: Optional[str] = None
+    email: Optional[str] = None
     site: Optional[str]
     sn: Optional[str]
     kit: Optional[str]

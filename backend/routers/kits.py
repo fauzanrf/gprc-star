@@ -79,6 +79,7 @@ def list_kits(
         if k.account:
             out.account_number = k.account.account_number
             out.account_name   = k.account.account_name
+            out.email          = k.account.email
 
         val_tb = parse_quota_tb(k.quota)
         if val_tb >= 5.0:

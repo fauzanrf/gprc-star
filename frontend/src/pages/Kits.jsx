@@ -328,6 +328,7 @@ export default function Kits({ selectedParentId }) {
                   <td style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>{k.account_name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{k.account_number}</div>
+                    {k.email && <div style={{ fontSize: 11, color: '#38bdf8', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}><span>✉️</span> {k.email}</div>}
                   </td>
                   <td
                     style={{

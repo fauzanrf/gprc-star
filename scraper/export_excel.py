@@ -3,6 +3,7 @@ export_excel.py
 ================
 Utility untuk mengonversi hasil scraping Starlink (JSON / dict list) ke file Excel (.xlsx)
 dengan format profesional, lebar kolom otomatis, dan pewarnaan status.
+Mendukung penyertaan kolom Email otomatis dari database accounts atau file master excel.
 """
 from pathlib import Path
 from typing import List, Dict, Any
@@ -14,6 +15,7 @@ COLUMNS = [
     ("no", "No", 6),
     ("controller", "Controller / Account", 26),
     ("code", "Account Code", 26),
+    ("email", "Email", 28),
     ("site", "Site Name", 24),
     ("sn", "Dish Serial Number (SN)", 22),
     ("kit", "KIT Serial Number", 22),
@@ -31,12 +33,74 @@ STATUS_COLORS = {
 }
 
 
+def load_email_mapping() -> Dict[str, str]:
+    """Cari mapping code / controller -> email dari database atau email starlink.xlsx."""
+    mapping = {}
+
+    # 1. Coba dari DB accounts jika ada koneksi
+    try:
+        import os
+        import pymysql
+        conn = pymysql.connect(
+            host=os.getenv("DB_HOST", "mysql"),
+            port=int(os.getenv("DB_PORT", "3306")),
+            user=os.getenv("DB_USER", "starlink"),
+            password=os.getenv("DB_PASSWORD", "starlink_pass"),
+            database=os.getenv("DB_NAME", "starlink_db"),
+            charset="utf8mb4",
+            connect_timeout=3,
+        )
+        with conn.cursor() as cur:
+            cur.execute("SELECT account_number, account_name, email FROM accounts WHERE email IS NOT NULL AND email != ''")
+            for acc_num, acc_name, mail in cur.fetchall():
+                if mail:
+                    m = str(mail).strip()
+                    if acc_num:
+                        mapping[str(acc_num).strip()] = m
+                    if acc_name:
+                        mapping[str(acc_name).strip().lower()] = m
+        conn.close()
+    except Exception:
+        pass
+
+    # 2. Coba baca dari file master email starlink.xlsx jika ada
+    candidates = [
+        Path("email starlink.xlsx"),
+        Path("/app/email starlink.xlsx"),
+        Path("/data/email starlink.xlsx"),
+        Path(__file__).resolve().parent.parent / "email starlink.xlsx",
+        Path(__file__).resolve().parent / "email starlink.xlsx",
+    ]
+    for p in candidates:
+        if p.exists():
+            try:
+                wb = openpyxl.load_workbook(str(p), data_only=True)
+                ws = wb.active
+                for r in list(ws.iter_rows(values_only=True))[1:]:
+                    if len(r) >= 3:
+                        ctrl, code, mail = r[0], r[1], r[2]
+                        if mail and str(mail).strip() and str(mail).strip().lower() != "none":
+                            m = str(mail).strip()
+                            if code:
+                                mapping[str(code).strip()] = m
+                            if ctrl:
+                                mapping[str(ctrl).strip().lower()] = m
+                break
+            except Exception:
+                pass
+
+    return mapping
+
+
 def save_to_excel(rows: List[Dict[str, Any]], output_path: str | Path):
     """Simpan list baris data scraping ke format file Excel dengan formatting rapi."""
     output_path = Path(output_path)
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Starlink KITs"
+
+    # Muat mapping email untuk melengkapi data baris jika kosong
+    email_map = load_email_mapping()
 
     # Header style
     header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
@@ -64,6 +128,14 @@ def save_to_excel(rows: List[Dict[str, Any]], output_path: str | Path):
     # Write data
     data_font = Font(name="Segoe UI", size=10)
     for r_idx, row in enumerate(rows, start=2):
+        # Resolve email
+        email_val = row.get("email")
+        if not email_val or email_val in ("-", "None", "null", ""):
+            code_key = str(row.get("code") or "").strip()
+            ctrl_key = str(row.get("controller") or "").strip().lower()
+            email_val = email_map.get(code_key) or email_map.get(ctrl_key) or "-"
+            row["email"] = email_val
+
         row_values = []
         for key, _, _ in COLUMNS:
             val = row.get(key)
