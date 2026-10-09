@@ -108,9 +108,9 @@ def update_user(
     user_id: int,
     payload: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("super_admin")),
+    current_user: User = Depends(require_roles("super_admin", "noc2")),
 ):
-    """Updates user information and role. Restricted to Super Admin."""
+    """Updates user information and role. Restricted to Super Admin & NOC 2."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User tidak ditemukan.")
@@ -140,7 +140,7 @@ def update_user(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("super_admin")),
+    current_user: User = Depends(require_roles("super_admin", "noc2")),
 ):
     """Deletes a user. Cannot delete own account."""
     if current_user.id == user_id:

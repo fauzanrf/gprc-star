@@ -1,18 +1,9 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff, Shield } from 'lucide-react'
+import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react'
 import { AuthNotification } from '../components/AuthNotification'
 import logoImg from '../logo.png'
-
-const DEMO_ACCOUNTS = [
-  { role: 'super_admin', label: 'Super Admin', email: 'admin@internetwork.net.id', password: 'admin' },
-  { role: 'noc2',        label: 'NOC 2',       email: 'noc2@internetwork.net.id',  password: 'noc2' },
-  { role: 'noc1',        label: 'NOC 1',       email: 'noc1@internetwork.net.id',  password: 'noc1' },
-  { role: 'technical_support', label: 'Tech Support', email: 'techsup@internetwork.net.id', password: 'techsup' },
-  { role: 'magang',      label: 'Magang',      email: 'magang@internetwork.net.id', password: 'magang' },
-  { role: 'provisioning',label: 'Provisioning',email: 'provisioning@internetwork.net.id', password: 'provi' },
-]
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -46,12 +37,6 @@ export default function LoginPage() {
       setError('Terjadi kesalahan saat memproses login.')
       setIsLoading(false)
     }
-  }
-
-  const handleFillDemo = (acc) => {
-    setEmail(acc.email)
-    setPassword(acc.password)
-    setError('')
   }
 
   return (
@@ -178,27 +163,6 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
-
-          {/* Quick Demo Credentials for ACL */}
-          <div className="nexcare-demo-box">
-            <div className="nexcare-demo-title">
-              <Shield size={13} />
-              <span>Login Cepat Berdasarkan Role ACL:</span>
-            </div>
-            <div className="nexcare-demo-chips">
-              {DEMO_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.role}
-                  type="button"
-                  className={`nexcare-demo-chip ${email === acc.email ? 'active' : ''}`}
-                  onClick={() => handleFillDemo(acc)}
-                  title={`${acc.label}: ${acc.email} / ${acc.password}`}
-                >
-                  {acc.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
           <div className="nexcare-divider-section">
             <div className="nexcare-divider-line" />

@@ -15,6 +15,7 @@ import StarlinkSession from './pages/StarlinkSession'
 import LoginPage from './pages/Login'
 import ParentAccounts from './pages/ParentAccounts'
 import WhatsAppPage from './pages/WhatsApp'
+import ManageACL from './pages/ManageACL'
 import { getAuthStatus, getParentAccounts } from './api'
 import { useAuth } from './contexts/AuthContext'
 import { ROLE_LABELS, ROLE_BADGE_STYLES } from './lib/permissions'
@@ -35,6 +36,7 @@ const NAV_GROUPS = [
       { to: '/kits', icon: Monitor, label: 'KIT / Terminal' },
       { to: '/accounts', icon: Users, label: 'Accounts' },
       { to: '/scraping', icon: RefreshCw, label: 'Scraping Control' },
+      { to: '/acl', icon: Shield, label: 'Manajemen ACL' },
     ]
   },
   {
@@ -102,6 +104,7 @@ export default function App() {
     if (location.pathname.startsWith('/kits')) return 'KIT / Terminal'
     if (location.pathname.startsWith('/accounts')) return 'Accounts'
     if (location.pathname.startsWith('/scraping')) return 'Scraping Control'
+    if (location.pathname.startsWith('/acl')) return 'Manajemen ACL'
     if (location.pathname.startsWith('/starlink-session')) return 'Sesi Scraper Starlink'
     if (location.pathname.startsWith('/whatsapp')) return 'Notifikasi WhatsApp'
     return 'Dashboard'
@@ -395,6 +398,7 @@ export default function App() {
               <Route path="/kits" element={<Kits selectedParentId={selectedParentId} />} />
               <Route path="/accounts" element={<Accounts selectedParentId={selectedParentId} />} />
               <Route path="/scraping" element={<Scraping />} />
+              <Route path="/acl" element={<ManageACL />} />
               <Route path="/starlink-session" element={<StarlinkSession />} />
               <Route path="/login" element={<Navigate to="/" replace />} />
               <Route path="/whatsapp" element={<WhatsAppPage />} />
