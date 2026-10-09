@@ -22,7 +22,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    allow_headers_to_expose=["*"],
 )
 
 # Include routers
