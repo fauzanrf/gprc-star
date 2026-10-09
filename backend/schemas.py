@@ -44,6 +44,24 @@ class AccountOut(AccountBase):
         from_attributes = True
 
 
+class AccountUpdate(BaseModel):
+    account_name: Optional[str] = None
+    email: Optional[str] = None
+    parent_account_id: Optional[int] = None
+
+
+class AccountBulkEmailItem(BaseModel):
+    account_number: Optional[str] = None
+    account_id: Optional[int] = None
+    email: str
+
+
+class AccountBulkUpdateResult(BaseModel):
+    updated_count: int
+    errors: List[str] = []
+
+
+
 # ── Kit ──────────────────────────────────────────────────────────────────────
 class KitOut(BaseModel):
     id: int
@@ -106,6 +124,41 @@ class LoginRequest(BaseModel):
 class SessionStatus(BaseModel):
     is_valid: bool
     updated_at: Optional[datetime]
+
+
+# ── System User Auth & ACL ───────────────────────────────────────────────────
+class UserLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class UserOut(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+    avatar_url: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class UserTokenResponse(BaseModel):
+    accessToken: str
+    token_type: str = "bearer"
+    user: UserOut
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: Optional[str] = "noc1"
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    role: Optional[str] = None
+
 
 
 # ── KIT Grouping & Quota Monitoring ──────────────────────────────────────────

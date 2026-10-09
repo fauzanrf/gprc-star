@@ -1,19 +1,23 @@
 import React, { useEffect, useState } from 'react'
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom'
 import {
   LayoutDashboard, Monitor, Users, RefreshCw, LogIn, Building2,
-  QrCode, ExternalLink, ShieldCheck, ChevronRight, MessageSquare,
-  PanelLeftClose, PanelLeftOpen, Menu, X, Layers
+  ExternalLink, ChevronRight, MessageSquare,
+  PanelLeftClose, PanelLeftOpen, Menu, X, Layers, LogOut,
+  User as UserIcon, Shield
 } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Kits from './pages/Kits'
 import Accounts from './pages/Accounts'
 import Groups from './pages/Groups'
 import Scraping from './pages/Scraping'
+import StarlinkSession from './pages/StarlinkSession'
 import LoginPage from './pages/Login'
 import ParentAccounts from './pages/ParentAccounts'
 import WhatsAppPage from './pages/WhatsApp'
 import { getAuthStatus, getParentAccounts } from './api'
+import { useAuth } from './contexts/AuthContext'
+import { ROLE_LABELS, ROLE_BADGE_STYLES } from './lib/permissions'
 import logoImg from './logo.png'
 
 const NAV_GROUPS = [
@@ -37,13 +41,15 @@ const NAV_GROUPS = [
     title: 'INTEGRASI & SISTEM',
     items: [
       { to: '/whatsapp', icon: MessageSquare, label: 'Notifikasi WA' },
-      { to: '/login', icon: LogIn, label: 'Login Starlink' },
+      { to: '/starlink-session', icon: LogIn, label: 'Sesi Scraper (OTP)' },
     ]
   }
 ]
 
 export default function App() {
   const location = useLocation()
+  const { session, isLoading, logout, role } = useAuth()
+
   const [sessionValid, setSessionValid] = useState(null)
   const [parentAccounts, setParentAccounts] = useState([])
   const [selectedParentId, setSelectedParentId] = useState(
@@ -68,14 +74,16 @@ export default function App() {
   }, [location.pathname])
 
   useEffect(() => {
-    getAuthStatus()
-      .then(d => setSessionValid(d.is_valid))
-      .catch(() => setSessionValid(false))
+    if (session) {
+      getAuthStatus()
+        .then(d => setSessionValid(d.is_valid))
+        .catch(() => setSessionValid(false))
 
-    getParentAccounts()
-      .then(setParentAccounts)
-      .catch(() => {})
-  }, [location.pathname])
+      getParentAccounts()
+        .then(setParentAccounts)
+        .catch(() => {})
+    }
+  }, [location.pathname, session])
 
   const handleSelectParent = (val) => {
     setSelectedParentId(val)
@@ -94,10 +102,50 @@ export default function App() {
     if (location.pathname.startsWith('/kits')) return 'KIT / Terminal'
     if (location.pathname.startsWith('/accounts')) return 'Accounts'
     if (location.pathname.startsWith('/scraping')) return 'Scraping Control'
-    if (location.pathname.startsWith('/login')) return 'Login Starlink'
+    if (location.pathname.startsWith('/starlink-session')) return 'Sesi Scraper Starlink'
     if (location.pathname.startsWith('/whatsapp')) return 'Notifikasi WhatsApp'
     return 'Dashboard'
   }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f8fafc',
+        flexDirection: 'column',
+        gap: 14
+      }}>
+        <div style={{
+          width: 42,
+          height: 42,
+          border: '4px solid #5e35b1',
+          borderTopColor: 'transparent',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite'
+        }} />
+        <p style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>
+          Memuat sesi NEXCARE...
+        </p>
+      </div>
+    )
+  }
+
+  // If not authenticated, render Login Page
+  if (!session) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    )
+  }
+
+  const roleStyle = ROLE_BADGE_STYLES[role] || { background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }
+  const roleName = ROLE_LABELS[role] || role || 'User'
 
   return (
     <div className={`layout ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
@@ -128,6 +176,50 @@ export default function App() {
             <X size={20} />
           </button>
         </div>
+
+        {/* User Card in Sidebar (Nexcare style) */}
+        {!sidebarCollapsed && (
+          <div style={{
+            margin: '12px 14px 4px',
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: '#f8fafc',
+            border: '1px solid var(--border-light)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10
+          }}>
+            <div style={{
+              width: 34,
+              height: 34,
+              borderRadius: '50%',
+              background: 'var(--purple-light)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--purple-main)',
+              flexShrink: 0
+            }}>
+              <UserIcon size={17} />
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {session.name}
+              </div>
+              <span style={{
+                display: 'inline-block',
+                fontSize: 10.5,
+                fontWeight: 700,
+                padding: '1px 7px',
+                borderRadius: 10,
+                marginTop: 2,
+                ...roleStyle
+              }}>
+                {roleName}
+              </span>
+            </div>
+          </div>
+        )}
 
         <nav className="nav-container">
           {NAV_GROUPS.map((group, idx) => (
@@ -169,7 +261,7 @@ export default function App() {
         <div className="sidebar-footer">
           <div className="version-pill" title="v2.0 • Production (WIB)">
             <span className="dot-live" />
-            <span>v2.0 • Production (WIB)</span>
+            <span>v2.0 • ACL Ready</span>
           </div>
         </div>
       </aside>
@@ -179,7 +271,7 @@ export default function App() {
         {/* Topbar */}
         <header className="topbar">
           <div className="topbar-left">
-            {/* Mobile Hamburger Button (<= 992px) */}
+            {/* Mobile Hamburger Button */}
             <button
               className="mobile-toggle-btn"
               onClick={() => setMobileMenuOpen(true)}
@@ -189,7 +281,7 @@ export default function App() {
               <Menu size={20} />
             </button>
 
-            {/* Desktop Sidebar Collapse Toggle Button (> 992px) */}
+            {/* Desktop Sidebar Collapse Toggle */}
             <button
               className="desktop-collapse-btn"
               onClick={toggleSidebar}
@@ -239,12 +331,56 @@ export default function App() {
             {sessionValid !== null && (
               <div className={`session-pill ${sessionValid ? 'valid' : 'invalid'}`}>
                 <span className={`status-dot ${sessionValid ? 'online' : 'offline'}`} />
-                <span>{sessionValid ? 'Sesi Aktif' : 'Sesi Kedaluwarsa'}</span>
+                <span>{sessionValid ? 'Scraper Siap' : 'Scraper Offline'}</span>
               </div>
             )}
 
-            <div className="user-avatar" title="Starlink Admin">
-              <span>SL</span>
+            {/* User Profile & ACL Role Badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 6, borderLeft: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {session.name}
+                </span>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: 8,
+                  marginTop: 2,
+                  ...roleStyle
+                }}>
+                  {roleName}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={logout}
+                title="Keluar dari sistem (Logout)"
+                style={{
+                  background: '#fee2e2',
+                  color: '#dc2626',
+                  border: '1px solid #fecaca',
+                  borderRadius: 8,
+                  width: 32,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#dc2626'
+                  e.currentTarget.style.color = '#ffffff'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#fee2e2'
+                  e.currentTarget.style.color = '#dc2626'
+                }}
+              >
+                <LogOut size={16} />
+              </button>
             </div>
           </div>
         </header>
@@ -259,8 +395,10 @@ export default function App() {
               <Route path="/kits" element={<Kits selectedParentId={selectedParentId} />} />
               <Route path="/accounts" element={<Accounts selectedParentId={selectedParentId} />} />
               <Route path="/scraping" element={<Scraping />} />
-              <Route path="/login" element={<LoginPage />} />
+              <Route path="/starlink-session" element={<StarlinkSession />} />
+              <Route path="/login" element={<Navigate to="/" replace />} />
               <Route path="/whatsapp" element={<WhatsAppPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </main>

@@ -1,259 +1,213 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { LogIn, ShieldCheck, AlertTriangle } from 'lucide-react'
-import { getAuthStatus, logout as apiLogout } from '../api'
-import { wsConnect } from '../api'
+import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff, Shield } from 'lucide-react'
+import { AuthNotification } from '../components/AuthNotification'
+import logoImg from '../logo.png'
+
+const DEMO_ACCOUNTS = [
+  { role: 'super_admin', label: 'Super Admin', email: 'admin@internetwork.net.id', password: 'admin' },
+  { role: 'noc2',        label: 'NOC 2',       email: 'noc2@internetwork.net.id',  password: 'noc2' },
+  { role: 'noc1',        label: 'NOC 1',       email: 'noc1@internetwork.net.id',  password: 'noc1' },
+  { role: 'technical_support', label: 'Tech Support', email: 'techsup@internetwork.net.id', password: 'techsup' },
+  { role: 'magang',      label: 'Magang',      email: 'magang@internetwork.net.id', password: 'magang' },
+  { role: 'provisioning',label: 'Provisioning',email: 'provisioning@internetwork.net.id', password: 'provi' },
+]
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
-  const [password, setPass] = useState('')
-  const [otp, setOtp] = useState('')
-  const [step, setStep] = useState('idle') // idle|connecting|otp_required|done|failed
-  const [messages, setMessages] = useState([])
-  const [sessionStatus, setSessionStatus] = useState(null)
-  const wsRef = useRef(null)
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [showNotification, setShowNotification] = useState(false)
 
-  useEffect(() => {
-    getAuthStatus().then(setSessionStatus).catch(() => {})
-    return () => wsRef.current?.close()
-  }, [])
+  const { login } = useAuth()
+  const navigate = useNavigate()
 
-  const addMsg = (msg) => setMessages(prev => [...prev, msg])
+  const handleLogin = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    setIsLoading(true)
+    setError('')
 
-  const handleStart = () => {
-    if (!email || !password) return
-    setMessages([])
-    setStep('connecting')
-    setOtp('')
-
-    const ws = wsConnect('/api/auth/ws')
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ action: 'start_login', email, password }))
-    }
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data)
-      if (msg.event === 'status') addMsg({ type: 'info', text: msg.message })
-      if (msg.event === 'otp_required') { setStep('otp_required'); addMsg({ type: 'warn', text: msg.message }) }
-      if (msg.event === 'login_success') {
-        setStep('done')
-        addMsg({ type: 'ok', text: msg.message })
-        getAuthStatus().then(setSessionStatus).catch(() => {})
+    try {
+      const { error: loginError } = await login(email, password)
+      if (loginError) {
+        setError(loginError.message)
+        setIsLoading(false)
+      } else {
+        // Show success notification matching Nexcare
+        setShowNotification(true)
+        setTimeout(() => {
+          navigate('/')
+        }, 1800)
       }
-      if (msg.event === 'login_failed') {
-        setStep('failed')
-        addMsg({ type: 'error', text: msg.message })
-      }
-      if (msg.event === 'error') {
-        setStep('failed')
-        addMsg({ type: 'error', text: msg.message })
-      }
-    }
-    ws.onclose = () => {
-      if (step === 'connecting' || step === 'otp_required') {
-        setStep('failed')
-        addMsg({ type: 'error', text: 'Koneksi WebSocket terputus.' })
-      }
+    } catch (err) {
+      setError('Terjadi kesalahan saat memproses login.')
+      setIsLoading(false)
     }
   }
 
-  const handleOtp = () => {
-    if (!otp.trim() || !wsRef.current) return
-    wsRef.current.send(JSON.stringify({ action: 'submit_otp', otp: otp.trim() }))
-    addMsg({ type: 'info', text: `OTP "${otp}" dikirim. Memverifikasi...` })
-    setOtp('')
-    setStep('connecting')
-  }
-
-  const handleLogout = async () => {
-    await apiLogout().catch(() => {})
-    setSessionStatus({ is_valid: false })
-    setStep('idle')
-    setMessages([])
-  }
-
-  const msgColor = {
-    info: 'var(--text-secondary)',
-    warn: 'var(--amber-text)',
-    ok: 'var(--green-text)',
-    error: 'var(--red-text)'
+  const handleFillDemo = (acc) => {
+    setEmail(acc.email)
+    setPassword(acc.password)
+    setError('')
   }
 
   return (
-    <>
-      <div className="page-header">
-        <h1 className="page-title">Login Starlink</h1>
-        <p className="page-subtitle">Kelola sesi autentikasi akun Starlink utama untuk scraping</p>
-      </div>
+    <div className="nexcare-login-wrapper">
+      <AuthNotification
+        isVisible={showNotification}
+        type="login"
+        message={`Signing in as ${email}...`}
+      />
 
-      <div className="login-layout-grid">
-        {/* Form Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Session Status Card */}
-          <div className="card">
-            <div className="card-body" style={{ padding: 18 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {sessionStatus?.is_valid ? (
-                  <>
-                    <div style={{ background: '#e8f5e9', padding: 8, borderRadius: 10, color: 'var(--green-text)' }}>
-                      <ShieldCheck size={24} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, color: 'var(--green-text)', fontSize: 14 }}>Sesi Aktif & Valid</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
-                        Terakhir update: {sessionStatus.updated_at ? new Date(sessionStatus.updated_at).toLocaleString('id-ID') : '-'}
-                      </div>
-                    </div>
-                    <button
-                      className="btn btn-ghost"
-                      style={{ marginLeft: 'auto', fontSize: 12, padding: '5px 12px' }}
-                      onClick={handleLogout}
-                    >
-                      Logout
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ background: '#fff8e1', padding: 8, borderRadius: 10, color: 'var(--amber-text)' }}>
-                      <AlertTriangle size={24} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, color: 'var(--amber-text)', fontSize: 14 }}>Sesi Tidak Aktif</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
-                        Perlu login untuk otorisasi sesi scraper.
-                      </div>
-                    </div>
-                  </>
-                )}
+      <div className="nexcare-login-container">
+        {/* Header */}
+        <div className="nexcare-login-header">
+          <div className="nexcare-logo-wrap">
+            <img src={logoImg} alt="Logo" className="nexcare-logo-img" />
+          </div>
+          <h2 className="nexcare-login-title">
+            Welcome to NEXCARE
+          </h2>
+          <p className="nexcare-login-subtitle">
+            Sign in to access your Starlink Monitoring dashboard
+          </p>
+        </div>
+
+        {/* Card */}
+        <div className="nexcare-login-card">
+          <form className="nexcare-login-form" onSubmit={handleLogin}>
+            {error && (
+              <div className="nexcare-error-banner">
+                {error}
+              </div>
+            )}
+
+            <div className="nexcare-field-group">
+              <label htmlFor="email" className="nexcare-field-label">
+                Email address
+              </label>
+              <div className="nexcare-input-box">
+                <div className="nexcare-input-icon">
+                  <Mail size={18} />
+                </div>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="nexcare-input"
+                  placeholder="you@internetwork.net.id"
+                />
               </div>
             </div>
-          </div>
 
-          {/* Login Credentials Card */}
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">{step === 'done' ? 'Login Berhasil' : 'Form Autentikasi'}</span>
-            </div>
-
-            <div className="card-body">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>
-                    Email Akun Starlink
-                  </label>
-                  <input
-                    className="search-input"
-                    style={{ width: '100%' }}
-                    type="email"
-                    placeholder="email@domain.com"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    disabled={step !== 'idle' && step !== 'failed' && step !== 'done'}
-                  />
+            <div className="nexcare-field-group">
+              <label htmlFor="password" className="nexcare-field-label">
+                Password
+              </label>
+              <div className="nexcare-input-box">
+                <div className="nexcare-input-icon">
+                  <Lock size={18} />
                 </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>
-                    Password
-                  </label>
-                  <input
-                    className="search-input"
-                    style={{ width: '100%' }}
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={e => setPass(e.target.value)}
-                    disabled={step !== 'idle' && step !== 'failed' && step !== 'done'}
-                  />
-                </div>
-
-                {step === 'otp_required' && (
-                  <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--purple-main)', marginBottom: 4 }}>
-                      Masukkan Kode OTP
-                    </div>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-                      Starlink mengirim kode verifikasi ke email / SMS Anda.
-                    </p>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        className="search-input"
-                        style={{ flex: 1, textAlign: 'center', fontSize: 18, letterSpacing: 6, fontWeight: 700 }}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={8}
-                        placeholder="______"
-                        value={otp}
-                        onChange={e => setOtp(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleOtp()}
-                        autoFocus
-                      />
-                      <button className="btn btn-primary" onClick={handleOtp} disabled={!otp.trim()}>
-                        Verifikasi
-                      </button>
-                    </div>
-                  </div>
-                )}
-
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="nexcare-input"
+                  placeholder="••••••••"
+                />
                 <button
-                  className="btn btn-primary"
-                  style={{ width: '100%', padding: '12px 18px', fontSize: 14, marginTop: 4 }}
-                  onClick={step === 'idle' || step === 'failed' || step === 'done' ? handleStart : undefined}
-                  disabled={step === 'connecting' || step === 'otp_required' || !email || !password}
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="nexcare-eye-btn"
+                  title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
                 >
-                  {step === 'connecting' ? (
-                    <>
-                      <span className="spinner" style={{ width: 16, height: 16 }} />
-                      <span>Menghubungkan ke Starlink...</span>
-                    </>
-                  ) : step === 'otp_required' ? (
-                    'Menunggu Verifikasi OTP...'
-                  ) : (
-                    <>
-                      <LogIn size={16} />
-                      <span>Login ke Starlink</span>
-                    </>
-                  )}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Console Log */}
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Console Log Autentikasi</span>
-          </div>
-          <div style={{ padding: '20px 24px', minHeight: 340, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {messages.length === 0 && (
-              <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                // Log proses autentikasi akan muncul di sini...
-              </span>
-            )}
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                style={{
-                  fontSize: 13,
-                  color: msgColor[m.type] || 'var(--text-primary)',
-                  display: 'flex',
-                  gap: 10,
-                  padding: '4px 0',
-                  borderBottom: '1px solid var(--border-light)'
-                }}
+            <div className="nexcare-form-row">
+              <label className="nexcare-checkbox-label">
+                <input
+                  id="remember-me"
+                  name="remember-me"
+                  type="checkbox"
+                  defaultChecked
+                  className="nexcare-checkbox"
+                />
+                <span>Remember me</span>
+              </label>
+
+              <a
+                href="#forgot"
+                onClick={(e) => { e.preventDefault(); setError('Silakan hubungi Super Admin untuk reset password.'); }}
+                className="nexcare-forgot-link"
               >
-                <span style={{ color: 'var(--text-light)', fontSize: 11, flexShrink: 0, marginTop: 2, fontFamily: 'monospace' }}>
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <span style={{ fontWeight: m.type === 'ok' || m.type === 'error' ? 600 : 400 }}>
-                  {m.text}
-                </span>
-              </div>
-            ))}
+                Forgot password?
+              </a>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="nexcare-submit-btn"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign in</span>
+                    <ArrowRight size={18} className="nexcare-arrow-icon" />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+
+          {/* Quick Demo Credentials for ACL */}
+          <div className="nexcare-demo-box">
+            <div className="nexcare-demo-title">
+              <Shield size={13} />
+              <span>Login Cepat Berdasarkan Role ACL:</span>
+            </div>
+            <div className="nexcare-demo-chips">
+              {DEMO_ACCOUNTS.map((acc) => (
+                <button
+                  key={acc.role}
+                  type="button"
+                  className={`nexcare-demo-chip ${email === acc.email ? 'active' : ''}`}
+                  onClick={() => handleFillDemo(acc)}
+                  title={`${acc.label}: ${acc.email} / ${acc.password}`}
+                >
+                  {acc.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="nexcare-divider-section">
+            <div className="nexcare-divider-line" />
+            <div className="nexcare-divider-badge">
+              PT InternetWork Indonesia
+            </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }

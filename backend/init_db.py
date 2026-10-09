@@ -48,6 +48,32 @@ for attempt in range(MAX_RETRIES):
                     conn.commit()
                     print(f"[DB] Linked existing sub-accounts to parent_id={parent_id}.", flush=True)
 
+            # Seed default ACL users if users table is empty
+            from auth_utils import hash_password
+            res = conn.execute(text("SELECT COUNT(*) FROM users"))
+            user_count = res.scalar() or 0
+            if user_count == 0:
+                print("[DB] Seeding default ACL users from Nexcare...", flush=True)
+                default_users = [
+                    {"name": "Super Admin", "email": "admin@internetwork.net.id", "password": "admin", "role": "super_admin"},
+                    {"name": "Admin NOC2", "email": "noc2@internetwork.net.id", "password": "noc2", "role": "noc2"},
+                    {"name": "NOC One", "email": "noc1@internetwork.net.id", "password": "noc1", "role": "noc1"},
+                    {"name": "Tech Support", "email": "techsup@internetwork.net.id", "password": "techsup", "role": "technical_support"},
+                    {"name": "Intern User", "email": "magang@internetwork.net.id", "password": "magang", "role": "magang"},
+                    {"name": "Provisioning", "email": "provisioning@internetwork.net.id", "password": "provi", "role": "provisioning"},
+                ]
+                for u in default_users:
+                    pwd_hash = hash_password(u["password"])
+                    conn.execute(
+                        text("""
+                            INSERT INTO users (name, email, password_hash, role, created_at, updated_at)
+                            VALUES (:name, :email, :pwd, :role, NOW(), NOW())
+                        """),
+                        {"name": u["name"], "email": u["email"], "pwd": pwd_hash, "role": u["role"]}
+                    )
+                conn.commit()
+                print(f"[DB] Seeded {len(default_users)} default users successfully.", flush=True)
+
         break
     except sqlalchemy.exc.OperationalError as e:
         print(f"[DB] Waiting for MySQL... ({attempt+1}/{MAX_RETRIES}): {e}", flush=True)
