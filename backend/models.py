@@ -33,6 +33,7 @@ class Account(Base):
     account_number    = Column(String(50), unique=True, nullable=False, index=True)
     account_name      = Column(String(255), nullable=False)
     email             = Column(String(255), nullable=True)
+    suspend_date      = Column(String(50), nullable=True)
     created_at        = Column(DateTime, default=func.now())
     updated_at        = Column(DateTime, default=func.now(), onupdate=func.now())
 

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, Mail, HardDrive, ExternalLink, X, AlertTriangle,
-  Edit2, Check, FileSpreadsheet, Building2, Save, AlertCircle, ShieldAlert
+  Edit2, Check, FileSpreadsheet, Building2, Save, AlertCircle, ShieldAlert,
+  Calendar
 } from 'lucide-react'
 import {
   getAccounts,
@@ -52,6 +53,11 @@ export default function Accounts({ selectedParentId }) {
   const [inlineEmail, setInlineEmail] = useState('')
   const [inlineSaving, setInlineSaving] = useState(false)
 
+  // Inline Suspend Date Editing
+  const [inlineEditingSuspendId, setInlineEditingSuspendId] = useState(null)
+  const [inlineSuspendDate, setInlineSuspendDate] = useState('')
+  const [inlineSuspendSaving, setInlineSuspendSaving] = useState(false)
+
   // Bulk Email Update Modal
   const [bulkModalOpen, setBulkModalOpen] = useState(false)
   const [bulkInputText, setBulkInputText] = useState('')
@@ -88,11 +94,12 @@ export default function Accounts({ selectedParentId }) {
         if (editModalData) setEditModalData(null)
         if (bulkModalOpen) setBulkModalOpen(false)
         if (inlineEditingId) setInlineEditingId(null)
+        if (inlineEditingSuspendId) setInlineEditingSuspendId(null)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [modalAccount, editModalData, bulkModalOpen, inlineEditingId])
+  }, [modalAccount, editModalData, bulkModalOpen, inlineEditingId, inlineEditingSuspendId])
 
   // Kits modal
   const handleOpenKitsModal = async (account) => {
@@ -140,6 +147,31 @@ export default function Accounts({ selectedParentId }) {
     }
   }
 
+  // Inline Suspend Date Save
+  const handleStartInlineSuspendEdit = (acc) => {
+    if (!canEdit) {
+      showToast('error', 'Role Viewer hanya memiliki akses baca-saja.')
+      return
+    }
+    setInlineEditingSuspendId(acc.id)
+    setInlineSuspendDate(acc.suspend_date || '')
+  }
+
+  const handleSaveInlineSuspendDate = async (accId) => {
+    setInlineSuspendSaving(true)
+    try {
+      const cleanVal = inlineSuspendDate.trim()
+      const updated = await updateAccount(accId, { suspend_date: cleanVal })
+      setAccounts(prev => prev.map(a => a.id === accId ? { ...a, suspend_date: updated.suspend_date } : a))
+      setInlineEditingSuspendId(null)
+      showToast('success', `Tanggal suspend berhasil disimpan: ${updated.suspend_date ? `Tanggal ${updated.suspend_date}` : '(kosong)'}`)
+    } catch (err) {
+      showToast('error', err.message || 'Gagal memperbarui tanggal suspend.')
+    } finally {
+      setInlineSuspendSaving(false)
+    }
+  }
+
   // Edit Modal Save
   const handleOpenEditModal = (acc) => {
     if (!canEdit) {
@@ -151,6 +183,7 @@ export default function Accounts({ selectedParentId }) {
       account_number: acc.account_number,
       account_name: acc.account_name,
       email: acc.email || '',
+      suspend_date: acc.suspend_date || '',
       parent_account_id: acc.parent_account_id || '',
     })
   }
@@ -163,6 +196,7 @@ export default function Accounts({ selectedParentId }) {
       const payload = {
         account_name: editModalData.account_name.trim(),
         email: editModalData.email.trim(),
+        suspend_date: editModalData.suspend_date ? editModalData.suspend_date.trim() : '',
         parent_account_id: editModalData.parent_account_id ? Number(editModalData.parent_account_id) : -1,
       }
       const updated = await updateAccount(editModalData.id, payload)
@@ -226,7 +260,8 @@ export default function Accounts({ selectedParentId }) {
   const filtered = accounts.filter(a =>
     (a.account_name || '').toLowerCase().includes(search.toLowerCase()) ||
     (a.account_number || '').toLowerCase().includes(search.toLowerCase()) ||
-    (a.email || '').toLowerCase().includes(search.toLowerCase())
+    (a.email || '').toLowerCase().includes(search.toLowerCase()) ||
+    (a.suspend_date ? String(a.suspend_date).toLowerCase().includes(search.toLowerCase()) : false)
   )
 
   const filteredModalKits = modalKits.filter(k =>
@@ -268,7 +303,7 @@ export default function Accounts({ selectedParentId }) {
         <div>
           <h1 className="page-title">Sub-Accounts</h1>
           <p className="page-subtitle">
-            {accounts.length} sub-akun Starlink terdaftar • Dapat diedit langsung dari luar (email & nama akun)
+            {accounts.length} sub-akun Starlink terdaftar
           </p>
         </div>
 
@@ -334,21 +369,21 @@ export default function Accounts({ selectedParentId }) {
                 <th>Nomor Akun</th>
                 <th>Akun Induk</th>
                 <th>Jumlah KIT</th>
-                <th style={{ minWidth: 260 }}>Alamat Email (Dapat Diedit)</th>
-                {canEdit && <th style={{ width: 90, textAlign: 'center' }}>Aksi</th>}
+                <th style={{ minWidth: 240 }}>Alamat Email</th>
+                <th style={{ minWidth: 160 }}>Tanggal Suspend</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={canEdit ? 7 : 6} style={{ textAlign: 'center', padding: '36px' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px' }}>
                     <span className="spinner-dark" />
                   </td>
                 </tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={canEdit ? 7 : 6} className="empty-state">
+                  <td colSpan={7} className="empty-state">
                     <div className="empty-state-icon">👤</div>
                     Tidak ada akun yang ditemukan.
                   </td>
@@ -515,40 +550,120 @@ export default function Accounts({ selectedParentId }) {
                     )}
                   </td>
 
-                  {/* Actions Column */}
-                  {canEdit && (
-                    <td style={{ textAlign: 'center' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditModal(a)}
-                        style={{
-                          background: '#f3e8ff',
-                          color: 'var(--purple-main)',
-                          border: '1px solid #d8b4fe',
-                          padding: '4px 10px',
-                          borderRadius: 6,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          transition: 'all 0.15s ease',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'var(--purple-main)'
-                          e.currentTarget.style.color = '#ffffff'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = '#f3e8ff'
-                          e.currentTarget.style.color = 'var(--purple-main)'
-                        }}
-                        title="Edit data akun lengkap"
-                      >
-                        <Edit2 size={12} /> Edit
-                      </button>
-                    </td>
-                  )}
+                  {/* Tanggal Suspend Column */}
+                  <td>
+                    {inlineEditingSuspendId === a.id ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={inlineSuspendDate}
+                          onChange={(e) => setInlineSuspendDate(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveInlineSuspendDate(a.id)
+                            if (e.key === 'Escape') setInlineEditingSuspendId(null)
+                          }}
+                          placeholder="misal: 15"
+                          className="search-input"
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: 12.5,
+                            height: 30,
+                            width: 80,
+                            borderColor: 'var(--purple-main)',
+                            outline: 'none',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={inlineSuspendSaving}
+                          onClick={() => handleSaveInlineSuspendDate(a.id)}
+                          style={{
+                            background: '#059669',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: 6,
+                            width: 28,
+                            height: 28,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                          }}
+                          title="Simpan (Enter)"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInlineEditingSuspendId(null)}
+                          style={{
+                            background: '#ef4444',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: 6,
+                            width: 28,
+                            height: 28,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                          }}
+                          title="Batal (Esc)"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        {a.suspend_date ? (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            background: '#fff8e1',
+                            color: '#b45309',
+                            border: '1px solid #ffecb3',
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}>
+                            <Calendar size={13} color="#d97706" style={{ flexShrink: 0 }} />
+                            <span>Tanggal {a.suspend_date}</span>
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic' }}>
+                            -
+                          </span>
+                        )}
+
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => handleStartInlineSuspendEdit(a)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--purple-main)',
+                              cursor: 'pointer',
+                              padding: '2px 4px',
+                              borderRadius: 4,
+                              opacity: 0.7,
+                              transition: 'opacity 0.15s ease',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+                            title="Edit tanggal suspend langsung di tabel"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -656,6 +771,26 @@ export default function Accounts({ selectedParentId }) {
                   </div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'block' }}>
                     Email PIC / klien ini dapat diedit kapan saja untuk keperluan notifikasi & rekonsiliasi.
+                  </span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                    Tanggal Suspend
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Calendar size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-light)' }} />
+                    <input
+                      type="text"
+                      value={editModalData.suspend_date}
+                      onChange={(e) => setEditModalData({ ...editModalData, suspend_date: e.target.value })}
+                      placeholder="Contoh: 15"
+                      className="search-input"
+                      style={{ width: '100%', paddingLeft: 32 }}
+                    />
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'block' }}>
+                    Tanggal siklus suspend / jatuh tempo per bulan untuk akun ini.
                   </span>
                 </div>
 

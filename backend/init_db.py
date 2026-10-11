@@ -22,6 +22,53 @@ for attempt in range(MAX_RETRIES):
                 conn.execute(text("ALTER TABLE accounts ADD COLUMN parent_account_id INT NULL"))
                 conn.commit()
 
+            # Migration: ensure suspend_date column exists in accounts table
+            res = conn.execute(text("SHOW COLUMNS FROM accounts LIKE 'suspend_date'"))
+            if not res.fetchone():
+                print("[DB] Migrating: Adding suspend_date to accounts...", flush=True)
+                conn.execute(text("ALTER TABLE accounts ADD COLUMN suspend_date VARCHAR(50) NULL"))
+                conn.commit()
+
+            # Seed / sync suspend_date from 'tanggal suspend akun.txt' if exists
+            candidate_txt_paths = [
+                os.path.join(os.path.dirname(__file__), "..", "tanggal suspend akun.txt"),
+                os.path.join(os.path.dirname(__file__), "tanggal suspend akun.txt"),
+                "/app/tanggal suspend akun.txt",
+                "/app/backend/tanggal suspend akun.txt",
+                "/data/tanggal suspend akun.txt",
+                "tanggal suspend akun.txt",
+            ]
+            for p in candidate_txt_paths:
+                if os.path.exists(p):
+                    try:
+                        print(f"[DB] Found suspend date file: {p}, syncing...", flush=True)
+                        with open(p, "r", encoding="utf-8") as f:
+                            lines = f.read().splitlines()[1:]
+                            synced = 0
+                            for line in lines:
+                                if not line.strip():
+                                    continue
+                                parts = line.split("\t")
+                                if len(parts) >= 2:
+                                    tgl = parts[0].strip()
+                                    acc_num = parts[1].strip()
+                                    if tgl and acc_num:
+                                        conn.execute(
+                                            text("""
+                                                UPDATE accounts 
+                                                SET suspend_date = :tgl 
+                                                WHERE account_number = :acc_num
+                                                  AND (suspend_date IS NULL OR suspend_date = '')
+                                            """),
+                                            {"tgl": tgl, "acc_num": acc_num}
+                                        )
+                                        synced += 1
+                            conn.commit()
+                            print(f"[DB] Successfully synced {synced} suspend dates from {p}.", flush=True)
+                        break
+                    except Exception as e:
+                        print(f"[DB] Error syncing suspend dates from {p}: {e}", flush=True)
+
             # Seed default parent account if empty
             res = conn.execute(text("SELECT COUNT(*) FROM parent_accounts"))
             count = res.scalar() or 0

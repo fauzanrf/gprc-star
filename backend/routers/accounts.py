@@ -37,6 +37,7 @@ def list_accounts(parent_id: Optional[int] = Query(None), db: Session = Depends(
         out = AccountOut.from_orm(acc)
         out.kit_count = kit_counts.get(acc.id, 0)
         out.email = acc.email or None
+        out.suspend_date = acc.suspend_date or None
         if acc.parent_account:
             out.parent_account_name = acc.parent_account.account_name
         result.append(out)
@@ -93,6 +94,10 @@ def update_account(
         clean_email = payload.email.strip()
         acc.email = clean_email if clean_email else None
 
+    if payload.suspend_date is not None:
+        clean_date = payload.suspend_date.strip()
+        acc.suspend_date = clean_date if clean_date else None
+
     if payload.account_name is not None and payload.account_name.strip():
         acc.account_name = payload.account_name.strip()
 
@@ -110,6 +115,7 @@ def update_account(
     out = AccountOut.from_orm(acc)
     out.kit_count = kit_count
     out.email = acc.email or None
+    out.suspend_date = acc.suspend_date or None
     if acc.parent_account:
         out.parent_account_name = acc.parent_account.account_name
     return out

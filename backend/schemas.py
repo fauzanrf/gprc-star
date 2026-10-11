@@ -35,6 +35,7 @@ class AccountOut(AccountBase):
     id: int
     parent_account_id: Optional[int] = None
     email: Optional[str] = None
+    suspend_date: Optional[str] = None
     parent_account_name: Optional[str] = None
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
@@ -47,6 +48,7 @@ class AccountOut(AccountBase):
 class AccountUpdate(BaseModel):
     account_name: Optional[str] = None
     email: Optional[str] = None
+    suspend_date: Optional[str] = None
     parent_account_id: Optional[int] = None
 
 
