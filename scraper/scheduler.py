@@ -106,6 +106,36 @@ def _get_db_conn():
     )
 
 
+def _get_setting_from_db(key: str, default: str = "") -> str:
+    try:
+        conn = _get_db_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT `value` FROM system_settings WHERE `key` = %s", (key,))
+            row = cur.fetchone()
+            if row and row.get("value") is not None:
+                return row["value"]
+        conn.close()
+    except Exception:
+        pass
+    return default
+
+
+def _set_setting_in_db(key: str, value: str):
+    try:
+        conn = _get_db_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO system_settings (`key`, `value`, `updated_at`) "
+                "VALUES (%s, %s, NOW()) "
+                "ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `updated_at` = NOW()",
+                (key, value),
+            )
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        log.warning(f"Gagal simpan setting {key}: {e}")
+
+
 def is_job_running() -> bool:
     try:
         conn = _get_db_conn()
@@ -404,33 +434,67 @@ def run_scraping(job_id: int = None) -> tuple[bool, int, str]:
     return all_success, total_kits, "\n".join(all_log_lines)
 
 
-# ── Notifikasi ────────────────────────────────────────────────────────────────
+# ── Notifikasi Reminder Suspend ───────────────────────────────────────────────
+
+def check_and_send_daily_suspend_reminder(force: bool = False) -> bool:
+    """
+    Periksa apakah reminder akun Starlink yang akan di-suspend hari ini sudah dikirim.
+    Jika belum dan waktu saat ini telah mencapai jam jadwal, kirimkan daftar akun via WhatsApp.
+    """
+    if not notifier:
+        return False
+    if not notifier.is_enabled():
+        return False
+    effective_target = notifier.get_effective_target()
+    if not effective_target:
+        return False
+
+    auto_enabled = _get_setting_from_db("wa_reminder_auto", "true").lower() in ("true", "1", "yes")
+    if not auto_enabled and not force:
+        return False
+
+    now_wib = datetime.now(timezone.utc) + timedelta(hours=7)
+    today_str = now_wib.strftime("%Y-%m-%d")
+    today_day = now_wib.day
+
+    last_sent = _get_setting_from_db("last_suspend_reminder_sent_date", "")
+    if last_sent == today_str and not force:
+        return False  # Sudah terkirim hari ini
+
+    scheduled_time = _get_setting_from_db("wa_reminder_time", "08:00").strip()
+    target_hour = 8
+    target_min = 0
+    try:
+        parts = scheduled_time.split(":")
+        target_hour = int(parts[0])
+        target_min = int(parts[1]) if len(parts) > 1 else 0
+    except Exception:
+        pass
+
+    if force or (now_wib.hour > target_hour) or (now_wib.hour == target_hour and now_wib.minute >= target_min):
+        log.info(f"Mengirimkan reminder suspend Starlink untuk Tanggal {today_day} ({today_str})...")
+        ok = notifier.send_suspend_reminder(target_day=today_day)
+        if ok:
+            log.info("Reminder suspend Starlink berhasil dikirim ke WhatsApp!")
+            _set_setting_in_db("last_suspend_reminder_sent_date", today_str)
+            return True
+        else:
+            log.warning("Reminder suspend Starlink gagal dikirim via WhatsApp.")
+            return False
+    return False
+
 
 def do_notify(previous_kits: list[dict], current_kits: list[dict]):
+    """Dipanggil setelah scrape selesai untuk memeriksa dan mengirimkan reminder suspend."""
     if not notifier:
         return
     effective_target = notifier.get_effective_target()
     if not effective_target or not notifier.is_enabled():
-        log.info("WA_TARGET belum diatur atau WA_ENABLED=false, skip notifikasi.")
+        log.info("WA_TARGET belum diatur atau WA_ENABLED=false, skip reminder.")
         return
 
-    new_suspended, new_restricted, recovered = compute_diff(previous_kits, current_kits)
-    stats = compute_stats(current_kits)
-
-    log.info(f"Diff: +{len(new_suspended)} suspended, +{len(new_restricted)} restricted, {len(recovered)} recovered")
-
-    if new_suspended or new_restricted or recovered:
-        log.info("Perubahan status terdeteksi — mengirim notifikasi WA...")
-        ok = notifier.send_status_change(
-            new_suspended=new_suspended,
-            new_restricted=new_restricted,
-            recovered=recovered,
-            stats=stats,
-        )
-        if not ok:
-            log.warning("Notifikasi WA gagal dikirim.")
-    else:
-        log.info("Tidak ada perubahan status — tidak ada notifikasi.")
+    # Kirim reminder akun yang jatuh tempo suspend hari ini
+    check_and_send_daily_suspend_reminder()
 
 
 # ── Main Loop ─────────────────────────────────────────────────────────────────
@@ -528,6 +592,8 @@ def main():
         while slept < sleep_sec and not _stop_event:
             time.sleep(min(5, sleep_sec - slept))
             slept += 5
+            if slept % 60 == 0:
+                check_and_send_daily_suspend_reminder()
 
     log.info("Scheduler dihentikan.")
 

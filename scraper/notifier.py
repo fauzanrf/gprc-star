@@ -30,30 +30,213 @@ def _now_wib() -> str:
     # WIB = UTC+7
     from datetime import timedelta
     wib = datetime.now(timezone.utc) + timedelta(hours=7)
-    return wib.strftime("%-d %b %Y, %H:%M WIB")
+    return f"{wib.day} {wib.strftime('%b %Y, %H:%M WIB')}"
+
+
+ID_MONTHS = [
+    "", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+]
+
+
+def _get_db_connection():
+    import pymysql
+    return pymysql.connect(
+        host=os.getenv("DB_HOST", "mysql"),
+        port=int(os.getenv("DB_PORT", "3306")),
+        user=os.getenv("DB_USER", "starlink"),
+        password=os.getenv("DB_PASSWORD", "Strl1nkDB2026!"),
+        database=os.getenv("DB_NAME", "starlink_db"),
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        connect_timeout=5,
+    )
 
 
 def _get_setting_from_db(key: str, default: str = "") -> str:
     try:
-        import pymysql
-        conn = pymysql.connect(
-            host=os.getenv("DB_HOST", "mysql"),
-            port=int(os.getenv("DB_PORT", "3306")),
-            user=os.getenv("DB_USER", "starlink"),
-            password=os.getenv("DB_PASSWORD", "starlink_pass"),
-            database=os.getenv("DB_NAME", "starlink_db"),
-            charset="utf8mb4",
-            connect_timeout=3,
-        )
+        conn = _get_db_connection()
         with conn.cursor() as cur:
             cur.execute("SELECT `value` FROM system_settings WHERE `key` = %s", (key,))
             row = cur.fetchone()
-            if row and row[0] is not None:
-                return row[0]
+            if row and row.get("value") is not None:
+                return row["value"]
         conn.close()
     except Exception:
         pass
     return default
+
+
+def get_suspend_accounts_from_db(day: int | None = None) -> list[dict]:
+    """
+    Ambil akun dan terminal Starlink yang memiliki suspend_date sesuai dengan hari tertentu (1-31).
+    """
+    import re
+    from datetime import timedelta
+    if day is None:
+        wib = datetime.now(timezone.utc) + timedelta(hours=7)
+        target_day = wib.day
+    else:
+        target_day = int(day)
+
+    try:
+        conn = _get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 
+                    a.id as account_id,
+                    a.account_number,
+                    a.account_name,
+                    a.suspend_date,
+                    k.id as kit_id,
+                    k.site,
+                    k.kit as kit_sn,
+                    k.sn as dish_sn,
+                    k.status as kit_status,
+                    k.quota
+                FROM accounts a
+                LEFT JOIN kits k ON k.account_id = a.id
+                WHERE a.suspend_date IS NOT NULL AND a.suspend_date != ''
+                ORDER BY a.account_name ASC, k.site ASC
+            """)
+            rows = cur.fetchall()
+        conn.close()
+
+        accounts_map = {}
+        for r in rows:
+            raw_sdate = str(r["suspend_date"]).strip()
+            # Cek kecocokan tanggal suspend
+            matches = False
+            digits = re.findall(r"\d+", raw_sdate)
+            if digits:
+                for d in digits:
+                    if int(d) == target_day:
+                        matches = True
+                        break
+            if not matches:
+                continue
+
+            acc_id = r["account_id"]
+            if acc_id not in accounts_map:
+                accounts_map[acc_id] = {
+                    "id": acc_id,
+                    "account_number": r["account_number"],
+                    "account_name": r["account_name"],
+                    "suspend_date": raw_sdate,
+                    "kits": []
+                }
+            if r["kit_id"]:
+                accounts_map[acc_id]["kits"].append({
+                    "id": r["kit_id"],
+                    "site": r["site"] or "-",
+                    "kit": r["kit_sn"] or "-",
+                    "sn": r["dish_sn"] or "-",
+                    "status": r["kit_status"] or "active",
+                    "quota": r["quota"] or "-"
+                })
+
+        return list(accounts_map.values())
+    except Exception as e:
+        print(f"[Notifier] Error query suspend accounts: {e}", flush=True)
+        return []
+
+
+def build_suspend_reminder_message(accounts: list[dict], target_day: int) -> str:
+    """
+    Bangun format pesan reminder WhatsApp untuk akun yang akan di-suspend pada tanggal tertentu.
+    """
+    from datetime import timedelta
+    wib = datetime.now(timezone.utc) + timedelta(hours=7)
+    month_name = ID_MONTHS[wib.month] if 1 <= wib.month <= 12 else ""
+    date_display = f"{target_day} {month_name} {wib.year}"
+    time_display = f"{wib.day} {wib.strftime('%b %Y, %H:%M WIB')}"
+
+    total_acc = len(accounts)
+    total_kits = sum(len(a.get("kits", [])) for a in accounts)
+
+    header = [
+        "🛰️ *PENGINGAT JATUH TEMPO SUSPEND STARLINK*",
+        f"📅 *Jatuh Tempo : Tanggal {target_day} ({date_display})*",
+        f"⏰ *Waktu Kirim : {time_display}*",
+        "────────────────────────",
+    ]
+
+    if not accounts:
+        header.extend([
+            f"✅ *Tidak ada akun Starlink yang jatuh tempo suspend pada tanggal {target_day}.*",
+            "",
+            "Semua akun dalam status aman untuk tanggal ini.",
+            "────────────────────────",
+            "_Pesan otomatis dari Starlink GPRC System_",
+        ])
+        return "\n".join(header)
+
+    header.append(f"Berikut daftar *{total_acc} akun* Starlink yang dijadwalkan *suspend pada tanggal {target_day}*:\n")
+
+    lines = list(header)
+    status_icons = {
+        "active": "🟢",
+        "suspended": "🔴",
+        "restricted": "⚠️",
+        "inactive": "⬛",
+    }
+    status_labels = {
+        "active": "Aktif",
+        "suspended": "Suspended",
+        "restricted": "Dibatasi",
+        "inactive": "Offline",
+    }
+
+    stat_counts = {"active": 0, "suspended": 0, "restricted": 0, "inactive": 0}
+
+    for idx, acc in enumerate(accounts, start=1):
+        acc_name = acc.get("account_name") or "-"
+        acc_num = acc.get("account_number") or "-"
+        kits = acc.get("kits", [])
+
+        lines.append(f"*{idx}. {acc_name}*")
+        lines.append(f"   • No. Akun: `{acc_num}`")
+
+        if not kits:
+            lines.append("   • Terminal: (Tidak ada terminal terdaftar)")
+        elif len(kits) == 1:
+            k = kits[0]
+            st = (k.get("status") or "active").lower()
+            stat_counts[st] = stat_counts.get(st, 0) + 1
+            icon = status_icons.get(st, "⚪")
+            label = status_labels.get(st, st)
+            site_name = k.get("site") or k.get("kit") or "-"
+            kit_code = k.get("kit") or "-"
+            lines.append(f"   • Site/KIT : {site_name} (`{kit_code}`)")
+            lines.append(f"   • Status   : {icon} {label}")
+        else:
+            lines.append(f"   • Terminal ({len(kits)} unit):")
+            for k in kits:
+                st = (k.get("status") or "active").lower()
+                stat_counts[st] = stat_counts.get(st, 0) + 1
+                icon = status_icons.get(st, "⚪")
+                label = status_labels.get(st, st)
+                site_name = k.get("site") or k.get("kit") or "-"
+                kit_code = k.get("kit") or "-"
+                lines.append(f"     - {site_name} (`{kit_code}`) — {icon} {label}")
+        lines.append("")
+
+    lines.append("────────────────────────")
+    lines.append(f"📊 *Ringkasan Tanggal {target_day}:*")
+    lines.append(f"• Total Akun     : {total_acc} Akun")
+    lines.append(f"• Total Terminal : {total_kits} Terminal")
+    lines.append(
+        f"• Rincian Status : 🟢 {stat_counts.get('active', 0)} Aktif | "
+        f"🔴 {stat_counts.get('suspended', 0)} Suspended | "
+        f"⚠️ {stat_counts.get('restricted', 0)} Dibatasi"
+    )
+    lines.append("")
+    lines.append("⚠️ *Perhatian:*")
+    lines.append("Mohon segera lakukan pengecekan tagihan / pembayaran perpanjangan sebelum layanan dinonaktifkan/suspend oleh Starlink.")
+    lines.append("")
+    lines.append("_Pesan otomatis dari Starlink GPRC System_")
+
+    return "\n".join(lines)
 
 
 class WANotifier:
@@ -192,6 +375,21 @@ class WANotifier:
         return self.send_message(msg, target)
 
     send_status_change = send_alert
+
+    def send_suspend_reminder(
+        self,
+        target_day: int | None = None,
+        target: str | None = None,
+    ) -> bool:
+        """Kirim reminder akun Starlink yang jatuh tempo suspend pada tanggal tertentu."""
+        from datetime import datetime, timezone, timedelta
+        if target_day is None:
+            wib = datetime.now(timezone.utc) + timedelta(hours=7)
+            target_day = wib.day
+
+        accounts = get_suspend_accounts_from_db(target_day)
+        msg = build_suspend_reminder_message(accounts, target_day)
+        return self.send_message(msg, target)
 
     def send_scrape_done(self, stats: dict[str, int], target: str | None = None) -> bool:
         """Kirim ringkasan hasil scraping (tanpa diff) — opsional."""

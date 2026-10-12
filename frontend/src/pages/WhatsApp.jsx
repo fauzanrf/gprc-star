@@ -13,7 +13,14 @@ import {
   CheckCheck,
   Bell,
   Save,
-  Info
+  Info,
+  Calendar,
+  Clock,
+  Copy,
+  Check,
+  Radio,
+  FileText,
+  AlertTriangle
 } from 'lucide-react'
 import {
   getWhatsAppStatus,
@@ -22,7 +29,9 @@ import {
   saveWhatsAppConfig,
   sendWhatsAppTest,
   disconnectWhatsApp,
-  reloadWhatsApp
+  reloadWhatsApp,
+  getWhatsAppReminderPreview,
+  sendWhatsAppReminder
 } from '../api'
 
 export default function WhatsAppPage() {
@@ -36,6 +45,8 @@ export default function WhatsAppPage() {
   const [selectedGroup, setSelectedGroup] = useState('')
   const [groups, setGroups] = useState([])
   const [loadingGroups, setLoadingGroups] = useState(false)
+  const [reminderAuto, setReminderAuto] = useState(true)
+  const [reminderTime, setReminderTime] = useState('08:00')
 
   // Actions State
   const [saving, setSaving] = useState(false)
@@ -47,6 +58,15 @@ export default function WhatsAppPage() {
 
   const [disconnecting, setDisconnecting] = useState(false)
   const [reloading, setReloading] = useState(false)
+
+  // Suspend Reminder State
+  const todayDay = new Date().getDate()
+  const [selectedDay, setSelectedDay] = useState(todayDay)
+  const [reminderPreview, setReminderPreview] = useState(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
+  const [sendingReminder, setSendingReminder] = useState(false)
+  const [reminderSendResult, setReminderSendResult] = useState(null)
+  const [copied, setCopied] = useState(false)
 
   // Helper untuk format nomor ke format WA (628xxx@s.whatsapp.net)
   const formatPhoneToJid = (val) => {
@@ -73,6 +93,8 @@ export default function WhatsAppPage() {
         if (st.config.wa_target_type === 'group') {
           setSelectedGroup(st.config.wa_target || '')
         }
+        setReminderAuto(st.config.wa_reminder_auto ?? true)
+        setReminderTime(st.config.wa_reminder_time || '08:00')
       }
     } catch (e) {
       console.error('Error fetching WA status:', e)
@@ -95,6 +117,19 @@ export default function WhatsAppPage() {
     }
   }, [status.connected])
 
+  // Fetch Suspend Reminder Preview
+  const fetchReminder = useCallback(async (dayToFetch) => {
+    setLoadingPreview(true)
+    try {
+      const res = await getWhatsAppReminderPreview({ day: dayToFetch })
+      setReminderPreview(res || null)
+    } catch (err) {
+      console.warn('Gagal memuat preview reminder:', err)
+    } finally {
+      setLoadingPreview(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchAll()
   }, [fetchAll])
@@ -104,6 +139,10 @@ export default function WhatsAppPage() {
       fetchGroups()
     }
   }, [status.connected, fetchGroups])
+
+  useEffect(() => {
+    fetchReminder(selectedDay)
+  }, [selectedDay, fetchReminder])
 
   // Auto poll status if not connected (for QR scan updates)
   useEffect(() => {
@@ -116,9 +155,9 @@ export default function WhatsAppPage() {
     return () => clearInterval(timer)
   }, [status.connected])
 
-  // Handle Save
-  const handleSave = async (e) => {
-    if (e) e.preventDefault()
+  // Handle Save Config
+  const handleSaveConfig = async (e) => {
+    e.preventDefault()
     setSaving(true)
     setSaveSuccess('')
     setSaveError('')
@@ -145,7 +184,9 @@ export default function WhatsAppPage() {
         wa_enabled: enabled,
         wa_target: finalTarget,
         wa_target_type: targetType,
-        wa_target_phone: phone
+        wa_target_phone: phone,
+        wa_reminder_auto: reminderAuto,
+        wa_reminder_time: reminderTime
       })
       setSaveSuccess(res.message || 'Konfigurasi berhasil disimpan!')
       setTimeout(() => setSaveSuccess(''), 4500)
@@ -175,13 +216,57 @@ export default function WhatsAppPage() {
     }
 
     try {
-      const res = await sendWhatsAppTest({ to: targetToTest })
+      const res = await sendWhatsAppTest({ to: targetToTest, day: selectedDay })
       setTestResult({ ok: true, message: res.message || 'Pesan uji coba berhasil terkirim!' })
     } catch (err) {
       setTestResult({ ok: false, message: err.message || 'Gagal mengirim pesan uji coba.' })
     } finally {
       setTesting(false)
     }
+  }
+
+  // Handle Send Reminder Now
+  const handleSendReminder = async () => {
+    let targetToSend = targetType === 'personal' ? formatPhoneToJid(phone) : selectedGroup
+    if (!targetToSend) {
+      alert('Tujuan WhatsApp (nomor HP atau grup) belum ditentukan!')
+      return
+    }
+
+    const count = reminderPreview?.total_accounts || 0
+    if (!window.confirm(`Kirim reminder suspend Tanggal ${selectedDay} (${count} akun) sekarang ke ${targetToSend}?`)) {
+      return
+    }
+
+    setSendingReminder(true)
+    setReminderSendResult(null)
+    try {
+      const res = await sendWhatsAppReminder({
+        day: selectedDay,
+        to: targetToSend
+      })
+      setReminderSendResult({
+        ok: true,
+        message: res.message || `Reminder Tanggal ${selectedDay} berhasil dikirim ke ${targetToSend}!`
+      })
+      setTimeout(() => setReminderSendResult(null), 6000)
+    } catch (err) {
+      setReminderSendResult({
+        ok: false,
+        message: err.message || 'Gagal mengirim reminder WhatsApp.'
+      })
+    } finally {
+      setSendingReminder(false)
+    }
+  }
+
+  // Handle Copy Message
+  const handleCopyMessage = () => {
+    if (!reminderPreview?.message) return
+    navigator.clipboard.writeText(reminderPreview.message).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
   }
 
   // Handle Disconnect
@@ -192,26 +277,24 @@ export default function WhatsAppPage() {
     setDisconnecting(true)
     try {
       await disconnectWhatsApp()
-      fetchAll()
+      await fetchAll()
     } catch (err) {
-      alert('Gagal disconnect: ' + err.message)
+      alert('Gagal memutuskan koneksi: ' + (err.message || err))
     } finally {
       setDisconnecting(false)
     }
   }
 
-  // Handle Reload / Force new QR
+  // Handle Reload
   const handleReload = async () => {
     setReloading(true)
     try {
       await reloadWhatsApp()
-      setTimeout(() => {
-        fetchAll()
-      }, 1000)
+      await fetchAll()
     } catch (err) {
       alert('Gagal me-reload WhatsApp Gateway: ' + (err.message || err))
     } finally {
-      setTimeout(() => setReloading(false), 2000)
+      setReloading(false)
     }
   }
 
@@ -223,17 +306,17 @@ export default function WhatsAppPage() {
         <div>
           <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ color: '#25D366', display: 'flex' }}><MessageSquare size={26} /></span>
-            Notifikasi WhatsApp
+            Notifikasi & Pengingat WhatsApp
           </h1>
           <p className="page-subtitle">
-            Kelola koneksi WhatsApp Gateway, nomor tujuan notifikasi, dan kirim pesan alert otomatis
+            Kelola WhatsApp Gateway dan kirim pesan reminder otomatis untuk Starlink yang akan di-suspend pada tanggal jatuh tempo.
           </p>
         </div>
 
         <button
           type="button"
           className="btn btn-ghost"
-          onClick={fetchAll}
+          onClick={() => { fetchAll(); fetchReminder(selectedDay); }}
           disabled={loadingStatus}
           style={{ fontSize: 13, gap: 6 }}
         >
@@ -242,8 +325,8 @@ export default function WhatsAppPage() {
         </button>
       </div>
 
-      {/* Grid Utama */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 24, marginBottom: 24 }}>
+      {/* Grid Atas: Status Gateway & Konfigurasi Pengiriman */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 24, marginBottom: 24 }}>
         
         {/* KARTU 1: Status Koneksi WhatsApp Gateway */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -260,10 +343,9 @@ export default function WhatsAppPage() {
                   padding: '4px 12px',
                   borderRadius: 20,
                   fontSize: 12,
-                  fontWeight: 700,
-                  background: status.connected ? '#e8f5e9' : (status.hasQR ? '#fff8e1' : '#ffebee'),
-                  color: status.connected ? '#2e7d32' : (status.hasQR ? '#b45309' : '#c62828'),
-                  border: `1px solid ${status.connected ? '#c8e6c9' : (status.hasQR ? '#fde68a' : '#ffcdd2')}`
+                  fontWeight: 600,
+                  background: status.connected ? '#dcfce7' : status.hasQR ? '#fef3c7' : '#fee2e2',
+                  color: status.connected ? '#15803d' : status.hasQR ? '#b45309' : '#b91c1c'
                 }}
               >
                 <span
@@ -271,232 +353,200 @@ export default function WhatsAppPage() {
                     width: 8,
                     height: 8,
                     borderRadius: '50%',
-                    background: status.connected ? '#00c853' : (status.hasQR ? '#f59e0b' : '#ef4444'),
-                    boxShadow: status.connected ? '0 0 8px #00c853' : 'none'
+                    background: status.connected ? '#22c55e' : status.hasQR ? '#f59e0b' : '#ef4444'
                   }}
                 />
-                {status.connected ? 'Terhubung (Online)' : (status.hasQR ? 'Menunggu Scan QR' : 'Terputus (Offline)')}
+                {status.connected ? 'Terhubung' : status.hasQR ? 'Menunggu Scan' : 'Terputus'}
               </span>
             </div>
 
+            {/* Konten Berdasarkan Status Koneksi */}
             {status.connected ? (
-              <div style={{ background: '#f8fafc', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', padding: 18, marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
-                    <CheckCircle2 size={24} />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--text-primary)' }}>
-                      WhatsApp Sesi Aktif
-                    </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                      Baileys Multi-File Auth Session &bull; Siap Kirim
-                    </div>
-                  </div>
+              <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+                <div
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: '50%',
+                    background: '#dcfce7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 16px',
+                    color: '#16a34a'
+                  }}
+                >
+                  <CheckCheck size={38} />
                 </div>
-
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  Gateway aktif melayani permintaan notifikasi. Setiap ada perubahan status (Suspended, ToS, atau Pulih) pada terminal Starlink, sistem akan otomatis mengirimkan pesan ke target yang Anda tentukan di bawah.
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '16px 8px', background: '#f8fafc', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)', marginBottom: 20 }}>
-                {status.qr ? (
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
-                      Scan QR Code dengan WhatsApp
-                    </div>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-                      Buka WhatsApp di HP &rarr; Menu Titik Tiga / Pengaturan &rarr; <b>Perangkat Tertaut</b> &rarr; <b>Tautkan Perangkat</b>
-                    </p>
-                    <div style={{ display: 'inline-block', padding: 8, background: '#ffffff', borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                      <img src={status.qr} alt="QR Code WhatsApp" style={{ width: 220, height: 220, display: 'block' }} />
-                    </div>
-                    <p style={{ fontSize: 11, color: 'var(--text-light)', marginTop: 10 }}>
-                      QR diperbarui otomatis. Jika scan gagal atau QR kadaluarsa, klik tombol di bawah.
-                    </p>
-                    <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={handleReload}
-                        disabled={reloading}
-                        style={{ fontSize: 12, gap: 6, padding: '4px 12px' }}
-                      >
-                        <RefreshCw size={12} className={reloading ? 'spin' : ''} />
-                        {reloading ? 'Membuat QR Baru...' : 'Perbarui QR Code'}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ padding: '24px 8px' }}>
-                    <QrCode size={38} color="var(--text-light)" style={{ marginBottom: 10 }} />
-                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-secondary)' }}>
-                      Menghubungkan ke WhatsApp Gateway...
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, marginBottom: 16 }}>
-                      Jika QR code belum muncul atau sesi terputus, klik tombol di bawah untuk membuat ulang QR code.
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={handleReload}
-                      disabled={reloading}
-                      style={{ fontSize: 13, gap: 8, display: 'inline-flex', alignItems: 'center' }}
-                    >
-                      <RefreshCw size={14} className={reloading ? 'spin' : ''} />
-                      {reloading ? 'Menyiapkan QR Baru...' : 'Muat Ulang / Buat QR Baru'}
-                    </button>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', marginBottom: 6 }}>
+                  WhatsApp Sesi Aktif
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 300, margin: '0 auto 16px' }}>
+                  Gateway siap mengirimkan notifikasi reminder akun Starlink.
+                </p>
+                {status.jid && (
+                  <div style={{
+                    display: 'inline-block',
+                    background: 'var(--bg-subtle)',
+                    border: '1px solid var(--border-light)',
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    color: 'var(--text-main)',
+                    marginBottom: 16
+                  }}>
+                    ID: {status.jid.split('@')[0]}
                   </div>
                 )}
+              </div>
+            ) : status.hasQR && status.qr ? (
+              <div style={{ textAlign: 'center', padding: '16px' }}>
+                <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text-main)' }}>
+                  Scan QR Code dengan WhatsApp
+                </h4>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                  Buka WhatsApp di HP &rarr; Menu Titik Tiga / Pengaturan &rarr; <b>Perangkat Tertaut</b> &rarr; <b>Tautkan Perangkat</b>
+                </p>
+                <div style={{ display: 'inline-block', padding: 12, background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                  <img src={status.qr} alt="QR Code WhatsApp" style={{ width: 200, height: 200, display: 'block' }} />
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12 }}>
+                  * QR Code otomatis diperbarui setiap 20 detik.
+                </p>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '36px 16px' }}>
+                <RefreshCw size={36} className="spin" style={{ color: 'var(--purple-main)', margin: '0 auto 16px', display: 'block' }} />
+                <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-main)' }}>
+                  Menghubungkan ke WhatsApp Gateway...
+                </h4>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, maxWidth: 280, margin: '6px auto 0' }}>
+                  Memeriksa modul Baileys WA. Pastikan container WhatsApp Gateway berjalan di VPS.
+                </p>
               </div>
             )}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: status.connected ? 'space-between' : 'flex-end', alignItems: 'center', paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
-            {!status.connected ? (
+          {/* Action Buttons Gateway */}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border-light)' }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={handleReload}
+              disabled={reloading}
+              title="Reload sesi gateway untuk membuat QR baru"
+              style={{ fontSize: 12.5 }}
+            >
+              <RefreshCw size={13} className={reloading ? 'spin' : ''} />
+              {reloading ? 'Merefresh...' : 'Reload Gateway'}
+            </button>
+            {status.connected && (
               <button
                 type="button"
-                className="btn btn-ghost"
-                onClick={handleReload}
-                disabled={reloading}
-                style={{ fontSize: 12, color: 'var(--purple-main)', borderColor: 'var(--purple-border)', gap: 6 }}
+                className="btn btn-danger"
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                style={{ fontSize: 12.5 }}
               >
-                <RefreshCw size={12} className={reloading ? 'spin' : ''} />
-                {reloading ? 'Memproses...' : 'Reset Sesi & Siapkan QR Baru'}
+                <LogOut size={13} /> {disconnecting ? 'Memutuskan...' : 'Putuskan Sesi'}
               </button>
-            ) : (
-              <>
-                <span style={{ fontSize: 12, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                  <CheckCircle2 size={14} /> Terhubung aktif
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={handleDisconnect}
-                  disabled={disconnecting}
-                  style={{ fontSize: 12.5, color: '#dc2626', borderColor: '#fecaca', gap: 6 }}
-                >
-                  <LogOut size={13} /> {disconnecting ? 'Memutuskan...' : 'Putuskan Sesi WhatsApp'}
-                </button>
-              </>
             )}
           </div>
         </div>
 
-        {/* KARTU 2: Pengaturan Target Notifikasi (Nomor Sendiri / Grup) */}
+        {/* KARTU 2: Form Konfigurasi Target Notifikasi */}
         <div className="card">
-          <div className="card-header" style={{ marginBottom: 16 }}>
+          <div className="card-header" style={{ marginBottom: 18 }}>
             <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Bell size={18} color="var(--purple-main)" /> Target Notifikasi
+              <Bell size={18} color="var(--purple-main)" /> Pengaturan Pengiriman
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: enabled ? 'var(--purple-main)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={e => setEnabled(e.target.checked)}
-                  style={{ width: 16, height: 16, accentColor: 'var(--purple-main)', cursor: 'pointer' }}
-                />
-                Notifikasi Aktif
-              </label>
-            </div>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={e => setEnabled(e.target.checked)}
+                style={{ cursor: 'pointer', accentColor: '#25D366' }}
+              />
+              <span>Aktifkan Notifikasi WA</span>
+            </label>
           </div>
 
-          <form onSubmit={handleSave}>
-            {/* Tab Pilihan: Nomor Pribadi vs Grup */}
-            <div style={{ display: 'flex', background: '#f1f5f9', padding: 4, borderRadius: 'var(--radius-sm)', marginBottom: 20 }}>
-              <button
-                type="button"
-                onClick={() => setTargetType('personal')}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  background: targetType === 'personal' ? '#ffffff' : 'transparent',
-                  color: targetType === 'personal' ? 'var(--purple-main)' : 'var(--text-secondary)',
-                  boxShadow: targetType === 'personal' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <Smartphone size={14} /> Nomor Pribadi Saya
-              </button>
-              <button
-                type="button"
-                onClick={() => setTargetType('group')}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  background: targetType === 'group' ? '#ffffff' : 'transparent',
-                  color: targetType === 'group' ? 'var(--purple-main)' : 'var(--text-secondary)',
-                  boxShadow: targetType === 'group' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <Users size={14} /> Grup WhatsApp
-              </button>
+          <form onSubmit={handleSaveConfig} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Tipe Target (Personal vs Grup) */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Tujuan Pengiriman
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setTargetType('personal')}
+                  className={`btn ${targetType === 'personal' ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ justifyContent: 'center', fontSize: 13 }}
+                >
+                  <Smartphone size={14} /> Nomor Pribadi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetType('group')}
+                  className={`btn ${targetType === 'group' ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ justifyContent: 'center', fontSize: 13 }}
+                >
+                  <Users size={14} /> Grup WhatsApp
+                </button>
+              </div>
             </div>
 
-            {/* Input Nomor Pribadi */}
+            {/* Input Personal Phone */}
             {targetType === 'personal' && (
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-                  Nomor WhatsApp Anda:
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Nomor WhatsApp Tujuan
                 </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="text"
-                    className="search-input"
-                    style={{ width: '100%', fontSize: 14, padding: '10px 14px' }}
-                    placeholder="Contoh: 08123456789 atau 628123456789"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                  />
-                </div>
-                {phone && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Info size={13} color="var(--purple-main)" />
-                    Format tujuan WhatsApp: <code style={{ color: 'var(--purple-main)', fontWeight: 600 }}>{formatPhoneToJid(phone)}</code>
-                  </div>
-                )}
+                <input
+                  type="text"
+                  className="input-text"
+                  placeholder="08123456789 atau 628123456789"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  style={{ width: '100%', fontSize: 13.5 }}
+                />
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-                  * Anda dapat memasukkan awalan <code>08...</code> atau <code>628...</code>. Sistem otomatis mengonversi ke format internasional.
+                  * Otomatis dikonversi ke format internasional (misal 628xxx@s.whatsapp.net).
                 </p>
               </div>
             )}
 
-            {/* Input Pilihan Grup */}
+            {/* Input Group Selector */}
             {targetType === 'group' && (
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-                  Pilih Grup WhatsApp Tujuan:
-                </label>
-                {loadingGroups ? (
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '10px 0' }}>
-                    <span className="spinner-dark" style={{ verticalAlign: 'middle', marginRight: 8 }} />
-                    Memuat daftar grup WhatsApp yang diikuti bot...
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Pilih Grup WhatsApp
+                  </label>
+                  <button
+                    type="button"
+                    onClick={fetchGroups}
+                    disabled={loadingGroups || !status.connected}
+                    style={{ background: 'none', border: 'none', color: 'var(--purple-main)', cursor: 'pointer', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <RefreshCw size={12} className={loadingGroups ? 'spin' : ''} /> Refresh Daftar
+                  </button>
+                </div>
+
+                {!status.connected ? (
+                  <div style={{ padding: 12, background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--text-muted)' }}>
+                    Scan QR terlebih dahulu agar bot dapat membaca daftar grup yang diikuti.
+                  </div>
+                ) : groups.length === 0 ? (
+                  <div style={{ padding: 12, background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {loadingGroups ? 'Memuat daftar grup...' : 'Belum ada grup yang ditemukan. Pastikan bot sudah dimasukkan ke grup WA Anda.'}
                   </div>
                 ) : (
                   <select
-                    className="filter-select"
-                    style={{ width: '100%', fontSize: 13.5, padding: '9px 12px' }}
+                    className="input-select"
+                    style={{ width: '100%', fontSize: 13 }}
                     value={selectedGroup}
                     onChange={e => setSelectedGroup(e.target.value)}
                   >
@@ -508,25 +558,51 @@ export default function WhatsAppPage() {
                     ))}
                   </select>
                 )}
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-                  * Bot harus sudah bergabung di grup tersebut agar dapat mengirimkan pesan alert.
-                </p>
               </div>
             )}
 
-            {/* Feedback Pesan */}
+            {/* Pengaturan Reminder Harian Otomatis */}
+            <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)', borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Clock size={15} color="var(--purple-main)" /> Reminder Harian Otomatis
+                </span>
+                <input
+                  type="checkbox"
+                  checked={reminderAuto}
+                  onChange={e => setReminderAuto(e.target.checked)}
+                  style={{ cursor: 'pointer', accentColor: '#25D366' }}
+                />
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                Kirim daftar akun Starlink yang jatuh tempo suspend pada tanggal tersebut secara otomatis setiap hari.
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Jam Kirim (WIB):
+                </label>
+                <input
+                  type="time"
+                  value={reminderTime}
+                  onChange={e => setReminderTime(e.target.value)}
+                  disabled={!reminderAuto}
+                  className="input-text"
+                  style={{ width: 110, fontSize: 13, padding: '4px 8px' }}
+                />
+              </div>
+            </div>
+
+            {/* Feedback Messages */}
             {saveSuccess && (
-              <div style={{ padding: '10px 14px', background: '#dcfce7', color: '#15803d', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ padding: '10px 14px', background: '#dcfce7', color: '#15803d', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <CheckCircle2 size={16} /> {saveSuccess}
               </div>
             )}
-
             {saveError && (
-              <div style={{ padding: '10px 14px', background: '#fee2e2', color: '#b91c1c', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ padding: '10px 14px', background: '#fee2e2', color: '#b91c1c', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <AlertCircle size={16} /> {saveError}
               </div>
             )}
-
             {testResult && (
               <div style={{
                 padding: '10px 14px',
@@ -535,7 +611,6 @@ export default function WhatsAppPage() {
                 borderRadius: 'var(--radius-sm)',
                 fontSize: 13,
                 fontWeight: 600,
-                marginBottom: 16,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8
@@ -545,23 +620,25 @@ export default function WhatsAppPage() {
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid var(--border-light)' }}>
+            {/* Action Buttons Form */}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid var(--border-light)' }}>
               <button
                 type="button"
-                className="btn btn-blue"
+                className="btn btn-ghost"
                 onClick={handleTest}
                 disabled={testing || !status.connected || (!phone && !selectedGroup)}
-                title="Kirim pesan tes ke nomor / grup yang dipilih"
+                title="Kirim pesan uji coba ke target yang dipilih"
+                style={{ fontSize: 12.5 }}
               >
-                <Send size={14} />
-                {testing ? 'Mengirim Tes...' : 'Kirim Pesan Uji Coba'}
+                <Send size={13} />
+                {testing ? 'Mengirim...' : 'Uji Coba Kirim'}
               </button>
 
               <button
                 type="submit"
                 className="btn btn-primary"
                 disabled={saving}
+                style={{ fontSize: 13 }}
               >
                 <Save size={14} />
                 {saving ? 'Menyimpan...' : 'Simpan Pengaturan'}
@@ -572,13 +649,228 @@ export default function WhatsAppPage() {
 
       </div>
 
+      {/* KARTU BESAR: Fitur Reminder Starlink Jatuh Tempo Suspend */}
+      <div className="card" style={{ marginBottom: 24, border: '1px solid var(--purple-main)', boxShadow: '0 4px 18px rgba(107, 70, 193, 0.08)' }}>
+        <div className="card-header" style={{ flexWrap: 'wrap', gap: 14, alignItems: 'center', borderBottom: '1px solid var(--border-light)', paddingBottom: 16 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <Calendar size={20} color="var(--purple-main)" />
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                Daftar Starlink Jatuh Tempo Suspend
+              </h2>
+              <span style={{ fontSize: 11, fontWeight: 700, background: '#ede9fe', color: 'var(--purple-main)', padding: '2px 8px', borderRadius: 12 }}>
+                Reminder Fitur
+              </span>
+            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>
+              Daftar akun & terminal Starlink yang jatuh tempo suspend pada tanggal yang dipilih dan akan dikirimkan via WhatsApp.
+            </p>
+          </div>
+
+          {/* Kontrol Pemilihan Tanggal & Tombol Kirim */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>Pilih Tanggal:</label>
+              <select
+                className="input-select"
+                value={selectedDay}
+                onChange={e => setSelectedDay(Number(e.target.value))}
+                style={{ fontWeight: 600, fontSize: 13, minWidth: 120 }}
+              >
+                {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                  <option key={d} value={d}>
+                    Tanggal {d} {d === todayDay ? '(Hari ini)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              className={`btn ${selectedDay === todayDay ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setSelectedDay(todayDay)}
+              style={{ fontSize: 12, padding: '6px 12px' }}
+            >
+              Hari Ini (Tgl {todayDay})
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-blue"
+              onClick={handleSendReminder}
+              disabled={sendingReminder || !status.connected || !effectiveJid}
+              style={{ fontSize: 13, gap: 6, fontWeight: 600 }}
+              title="Kirim daftar reminder suspend tanggal ini ke WhatsApp sekarang"
+            >
+              <Send size={14} />
+              {sendingReminder ? 'Mengirim Reminder...' : `Kirim Reminder Tgl ${selectedDay}`}
+            </button>
+          </div>
+        </div>
+
+        {/* Feedback Pengiriman Reminder */}
+        {reminderSendResult && (
+          <div style={{
+            margin: '16px 0 0',
+            padding: '12px 16px',
+            background: reminderSendResult.ok ? '#dcfce7' : '#fee2e2',
+            color: reminderSendResult.ok ? '#15803d' : '#b91c1c',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10
+          }}>
+            {reminderSendResult.ok ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+            {reminderSendResult.message}
+          </div>
+        )}
+
+        {/* Ringkasan Statistik Tanggal Terpilih */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, margin: '18px 0' }}>
+          <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)', borderRadius: 10, padding: '12px 16px' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tanggal Jatuh Tempo</span>
+            <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--purple-main)', marginTop: 4 }}>
+              Tanggal {selectedDay}
+            </div>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+              {reminderPreview?.target_date_display || `Tanggal ${selectedDay}`}
+            </span>
+          </div>
+
+          <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)', borderRadius: 10, padding: '12px 16px' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Akun</span>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-main)', marginTop: 4 }}>
+              {reminderPreview ? reminderPreview.total_accounts : '-'} Akun
+            </div>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Akan di-suspend</span>
+          </div>
+
+          <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)', borderRadius: 10, padding: '12px 16px' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Terminal</span>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-main)', marginTop: 4 }}>
+              {reminderPreview ? reminderPreview.total_kits : '-'} Unit
+            </div>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Perangkat Starlink</span>
+          </div>
+
+          <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)', borderRadius: 10, padding: '12px 16px' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Target Kirim WA</span>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {effectiveJid || '(Belum diset)'}
+            </div>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+              {targetType === 'personal' ? 'Nomor Pribadi' : 'Grup WhatsApp'}
+            </span>
+          </div>
+        </div>
+
+        {/* Tabel / List Akun yang Akan di-Suspend */}
+        <div style={{ marginTop: 8 }}>
+          {loadingPreview ? (
+            <div style={{ textAlign: 'center', padding: '30px 16px', color: 'var(--text-muted)' }}>
+              <RefreshCw size={20} className="spin" style={{ margin: '0 auto 8px', display: 'block' }} />
+              Memuat daftar akun Starlink untuk Tanggal {selectedDay}...
+            </div>
+          ) : !reminderPreview || reminderPreview.total_accounts === 0 ? (
+            <div style={{ textAlign: 'center', padding: '36px 16px', background: '#f8fafc', borderRadius: 10, border: '1px dashed #cbd5e1' }}>
+              <CheckCircle2 size={32} color="#16a34a" style={{ margin: '0 auto 10px', display: 'block' }} />
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)', margin: '0 0 4px' }}>
+                Tidak Ada Akun yang Jatuh Tempo Suspend pada Tanggal {selectedDay}
+              </h4>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 440, margin: '0 auto' }}>
+                Semua akun dalam status aman atau tidak ada akun dengan tanggal suspend {selectedDay} yang tercatat di database.
+              </p>
+            </div>
+          ) : (
+            <div className="table-responsive" style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid var(--border-light)', borderRadius: 8 }}>
+              <table className="table" style={{ width: '100%', fontSize: 12.5 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 2 }}>
+                  <tr>
+                    <th style={{ width: 40, textAlign: 'center' }}>No</th>
+                    <th>Nama Akun / Controller</th>
+                    <th>Nomor Akun</th>
+                    <th style={{ textAlign: 'center' }}>Tanggal Suspend</th>
+                    <th>Terminal Starlink (Kits)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reminderPreview.accounts.map((acc, idx) => (
+                    <tr key={acc.id || idx}>
+                      <td style={{ textAlign: 'center', fontWeight: 600, color: 'var(--text-muted)' }}>{idx + 1}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--text-main)' }}>{acc.account_name}</td>
+                      <td>
+                        <span style={{ fontFamily: 'monospace', fontSize: 12, background: 'var(--bg-subtle)', padding: '2px 6px', borderRadius: 4 }}>
+                          {acc.account_number}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          background: '#fff8e1',
+                          color: '#b45309',
+                          fontWeight: 700,
+                          fontSize: 11.5
+                        }}>
+                          <Calendar size={11} /> Tgl {acc.suspend_date}
+                        </span>
+                      </td>
+                      <td>
+                        {acc.kits && acc.kits.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {acc.kits.map((k, ki) => (
+                              <div key={k.id || ki} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 600 }}>{k.site || k.kit}</span>
+                                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({k.kit})</span>
+                                <span style={{
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: 4,
+                                  background: k.status === 'active' ? '#dcfce7' : k.status === 'suspended' ? '#fee2e2' : '#fef3c7',
+                                  color: k.status === 'active' ? '#15803d' : k.status === 'suspended' ? '#b91c1c' : '#b45309'
+                                }}>
+                                  {k.status ? k.status.toUpperCase() : 'UNKNOWN'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Tidak ada terminal terdaftar</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Row Bawah: Pratinjau Tampilan Pesan WhatsApp & Panduan */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 24 }}>
         
-        {/* Mockup Chat WhatsApp */}
+        {/* Mockup Chat WhatsApp dengan Teks Reminder Aktual */}
         <div className="card">
-          <div className="card-header">
-            <span className="card-title">Pratinjau Pesan di WhatsApp Anda</span>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="card-title">Pratinjau Pesan Reminder di WhatsApp</span>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={handleCopyMessage}
+              disabled={!reminderPreview?.message}
+              style={{ fontSize: 12, padding: '4px 10px', gap: 5 }}
+              title="Salin teks pesan ke clipboard"
+            >
+              {copied ? <Check size={13} color="#16a34a" /> : <Copy size={13} />}
+              {copied ? 'Tersalin!' : 'Salin Pesan'}
+            </button>
           </div>
 
           <div style={{
@@ -586,88 +878,79 @@ export default function WhatsAppPage() {
             backgroundImage: 'radial-gradient(#d1d7db 1px, transparent 1px)',
             backgroundSize: '16px 16px',
             borderRadius: 'var(--radius-md)',
-            padding: '20px 16px',
-            border: '1px solid #d1d7db'
+            padding: '18px 14px',
+            border: '1px solid #d1d7db',
+            maxHeight: 460,
+            overflowY: 'auto'
           }}>
             <div style={{
               background: '#ffffff',
               borderRadius: '8px 8px 8px 0px',
-              padding: '12px 14px',
-              maxWidth: 380,
+              padding: '14px 16px',
+              maxWidth: 420,
               boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
               position: 'relative',
-              fontSize: 12.8,
-              lineHeight: 1.5,
+              fontSize: 12.5,
+              lineHeight: 1.6,
               color: '#111b21',
-              fontFamily: 'Segoe UI, -apple-system, sans-serif'
+              fontFamily: 'Segoe UI, -apple-system, sans-serif',
+              whiteSpace: 'pre-wrap'
             }}>
-              <div style={{ fontWeight: 700, color: '#075e54', marginBottom: 2 }}>
-                🛰️ Starlink GPRC Alert
-              </div>
-              <div style={{ fontSize: 11, color: '#667781', marginBottom: 10 }}>
-                📅 24 Sep 2026, 05:15 WIB
-              </div>
+              {reminderPreview?.message || (
+                '🛰️ *PENGINGAT JATUH TEMPO SUSPEND STARLINK*\nMemuat pratinjau pesan...'
+              )}
 
-              <div style={{ marginBottom: 10 }}>
-                <span style={{ color: '#ea0038', fontWeight: 700 }}>🔴 SUSPENDED (1 terminal baru):</span>
-                <div style={{ paddingLeft: 8, marginTop: 3 }}>
-                  &bull; AKUN DaySpring &mdash; POS Pengaman Karang Anyar
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 10 }}>
-                <span style={{ color: '#00a884', fontWeight: 700 }}>✅ PULIH (1 terminal):</span>
-                <div style={{ paddingLeft: 8, marginTop: 3 }}>
-                  &bull; DSG-KANTOR DIST &mdash; DSG Site Camp 2
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px dashed #e2e8f0', paddingTop: 8, fontSize: 11.5, color: '#54656f' }}>
-                📊 <b>Total: 119 terminal</b><br />
-                ✅ Aktif: 115 &bull; 🔴 Suspended: 2 &bull; ⚠️ Dibatasi: 1 &bull; ⬛ Offline: 1
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 10.5, color: '#667781' }}>
-                <span>05:15</span>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 8, fontSize: 10.5, color: '#667781' }}>
+                <span>{reminderTime || '08:00'}</span>
                 <CheckCheck size={14} color="#53bdeb" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Informasi Jenis Alert */}
+        {/* Informasi Cara Kerja Reminder Suspend */}
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Kapan Notifikasi Dikirimkan?</span>
+            <span className="card-title">Bagaimana Cara Kerja Pengingat Suspend?</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#fef2f2', border: '1px solid #fee2e2', padding: 12, borderRadius: 8 }}>
-              <span style={{ fontSize: 20, flexShrink: 0 }}>🔴</span>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#eff6ff', border: '1px solid #dbeafe', padding: 12, borderRadius: 8 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>📅</span>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 13, color: '#991b1b' }}>Terminal Suspended (Kendala Pembayaran)</div>
-                <div style={{ fontSize: 12, color: '#7f1d1d', marginTop: 2, lineHeight: 1.4 }}>
-                  Notifikasi dikirim seketika saat sub-akun terdeteksi suspended atau belum dibayar oleh pelanggan.
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#fffbeb', border: '1px solid #fef3c7', padding: 12, borderRadius: 8 }}>
-              <span style={{ fontSize: 20, flexShrink: 0 }}>⚠️</span>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e' }}>Terminal Dibatasi / Fair Use ToS</div>
-                <div style={{ fontSize: 12, color: '#78350f', marginTop: 2, lineHeight: 1.4 }}>
-                  Pemberitahuan bila ada perangkat Starlink yang dibatasi kecepatannya karena pelanggaran ketentuan layanan atau kuota limit.
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1e40af' }}>1. Pencocokan Tanggal Suspend Akun</div>
+                <div style={{ fontSize: 12, color: '#1e3a8a', marginTop: 2, lineHeight: 1.4 }}>
+                  Sistem membaca <code>suspend_date</code> pada masing-masing akun (dapat diatur di menu Akun). Akun yang tanggalnya sesuai dengan hari berjalan akan otomatis dikelompokkan.
                 </div>
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#f0fdf4', border: '1px solid #dcfce7', padding: 12, borderRadius: 8 }}>
-              <span style={{ fontSize: 20, flexShrink: 0 }}>✅</span>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>⏰</span>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 13, color: '#166534' }}>Terminal Pulih (Recovered)</div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#166534' }}>2. Pengiriman Otomatis Harian</div>
                 <div style={{ fontSize: 12, color: '#14532d', marginTop: 2, lineHeight: 1.4 }}>
-                  Konfirmasi saat terminal yang sebelumnya bermasalah telah diselesaikan pembayarannya dan aktif kembali.
+                  Scheduler otomatis memeriksa tanggal hari ini dan mengirimkan daftar reminder tepat pada jam yang ditentukan (misalnya pukul <b>{reminderTime} WIB</b>) setiap pagi.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#fffbeb', border: '1px solid #fef3c7', padding: 12, borderRadius: 8 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>📲</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e' }}>3. Pengiriman Manual On-Demand</div>
+                <div style={{ fontSize: 12, color: '#78350f', marginTop: 2, lineHeight: 1.4 }}>
+                  Anda dapat memilih tanggal mana saja (1–31) dan menekan tombol <b>Kirim Reminder</b> kapan saja untuk mengirim pengingat secara instan ke tim tanpa menunggu jadwal otomatis.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#fef2f2', border: '1px solid #fee2e2', padding: 12, borderRadius: 8 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>⚠️</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#991b1b' }}>4. Pencegahan Layanan Terputus</div>
+                <div style={{ fontSize: 12, color: '#7f1d1d', marginTop: 2, lineHeight: 1.4 }}>
+                  Dengan adanya notifikasi reminder ini, tim operasional / keuangan dapat segera memproses pembayaran atau perpanjangan sebelum layanan terminal diputus/disuspend oleh Starlink.
                 </div>
               </div>
             </div>

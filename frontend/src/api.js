@@ -100,13 +100,21 @@ export const logoutStarlinkSession = () => apiFetch('/auth/logout', { method: 'P
 export const logout = logoutStarlinkSession // backward compatibility
 
 // ── WhatsApp Gateway & Notifications ─────────────────────────────────────────
-export const getWhatsAppStatus     = () => apiFetch('/whatsapp/status')
-export const getWhatsAppGroups     = () => apiFetch('/whatsapp/groups')
-export const getWhatsAppConfig     = () => apiFetch('/whatsapp/config')
-export const saveWhatsAppConfig    = (data) => apiFetch('/whatsapp/config', { method: 'POST', body: JSON.stringify(data) })
-export const sendWhatsAppTest      = (data = {}) => apiFetch('/whatsapp/test', { method: 'POST', body: JSON.stringify(data) })
-export const disconnectWhatsApp    = () => apiFetch('/whatsapp/disconnect', { method: 'POST' })
-export const reloadWhatsApp        = () => apiFetch('/whatsapp/reload', { method: 'POST' })
+export const getWhatsAppStatus          = () => apiFetch('/whatsapp/status')
+export const getWhatsAppGroups          = () => apiFetch('/whatsapp/groups')
+export const getWhatsAppConfig          = () => apiFetch('/whatsapp/config')
+export const saveWhatsAppConfig         = (data) => apiFetch('/whatsapp/config', { method: 'POST', body: JSON.stringify(data) })
+export const sendWhatsAppTest           = (data = {}) => apiFetch('/whatsapp/test', { method: 'POST', body: JSON.stringify(data) })
+export const disconnectWhatsApp         = () => apiFetch('/whatsapp/disconnect', { method: 'POST' })
+export const reloadWhatsApp             = () => apiFetch('/whatsapp/reload', { method: 'POST' })
+export const getWhatsAppReminderPreview = (params = {}) => {
+  const q = new URLSearchParams()
+  if (params.day !== undefined && params.day !== null) q.append('day', params.day)
+  if (params.date) q.append('date', params.date)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  return apiFetch(`/whatsapp/reminder/preview${qs}`)
+}
+export const sendWhatsAppReminder       = (data = {}) => apiFetch('/whatsapp/reminder/send', { method: 'POST', body: JSON.stringify(data) })
 
 // ── KIT Grouping & Quota Monitoring ──────────────────────────────────────────
 export const getGroups          = () => apiFetch('/groups')
