@@ -115,6 +115,7 @@ _RESTRICTION_CODE_NEGATIVE = {
 _SUSPEND_STATUS_VALUES = {
     # Real suspend / termination states only (strings)
     "suspended", "terminated", "billing_suspended", "suspend",
+    "delinquent", "past_due", "overdue", "payment_overdue", "non_payment",
 }
 
 # Fields whose VALUE indicates suspend/terminate state
@@ -418,7 +419,7 @@ async def _fetch_sl_data(
     sl_status_val = meta.get("status")
 
     # 3. Fetch detail service-line jika metadata belum lengkap
-    if (net_status is None or "subscription" not in meta) and sl:
+    if (net_status is None or not meta.get("subscription")) and sl:
         sl_det = await _fetch_json(
             page,
             f"https://starlink.com/api/webagg/v2/accounts/service-line/{sl}",
@@ -436,7 +437,7 @@ async def _fetch_sl_data(
 
     # 4. Resolve status akhir secara hierarkis:
     sub = meta.get("subscription") if isinstance(meta.get("subscription"), dict) else {}
-    sub_status_val = sub.get("status") or sub.get("subscriptionStatus")
+    sub_status_val = sub.get("status") or sub.get("subscriptionStatus") or sub.get("serviceStatus")
 
     # A. Cek restriction (banner DOM atau networkStatus > 1 ToS)
     if home_page_status == "restricted":
@@ -737,6 +738,47 @@ async def scrape_accounts(
                                         checkpoint.mark_done(acc_num)
                                     break
 
+                                # Ambil subscriptions metadata untuk verifikasi billing & suspend state
+                                sub_map: dict[str, dict] = {}
+                                sub_res_data = await _fetch_json(
+                                    page,
+                                    "https://starlink.com/api/webagg/v2/accounts/subscriptions",
+                                    label=f"Subscriptions {acc_num}",
+                                    limiter=limiter,
+                                )
+                                if sub_res_data:
+                                    sub_items = (
+                                        sub_res_data.get("content", {}).get("results", [])
+                                        if isinstance(sub_res_data.get("content"), dict)
+                                        else (sub_res_data.get("content") or [])
+                                    )
+                                    if isinstance(sub_items, list):
+                                        for sitem in sub_items:
+                                            if not isinstance(sitem, dict):
+                                                continue
+                                            for k in ("serviceLineNumber", "subscriptionNumber", "subscriptionId", "nickname"):
+                                                val = sitem.get(k)
+                                                if val:
+                                                    sub_map[str(val).strip().lower()] = sitem
+
+                                # DOM scan untuk Subscriptions table status di halaman Starlink
+                                dom_suspended_items = set()
+                                try:
+                                    page_rows = page.locator("tr.MuiTableRow-root")
+                                    p_cnt = await page_rows.count()
+                                    for r_idx in range(p_cnt):
+                                        r_el = page_rows.nth(r_idx)
+                                        r_text = (await r_el.inner_text()).lower()
+                                        if "suspended" in r_text:
+                                            tds = r_el.locator("td")
+                                            if await tds.count() > 0:
+                                                name_text = (await tds.nth(0).inner_text()).strip().lower()
+                                                if name_text:
+                                                    dom_suspended_items.add(name_text)
+                                            dom_suspended_items.add(r_text)
+                                except Exception:
+                                    pass
+
                                 # Process unique service lines secara paralel (asyncio.gather)
                                 unique_sls = list(dict.fromkeys(
                                     t.get("serviceLineNumber")
@@ -787,6 +829,21 @@ async def scrape_accounts(
                                     site = t_nick or base_site or "-"
                                     has_data = bool(quota not in ("-", "0.00 GB", "0 GB", "0 MB", "0.0 GB"))
 
+                                    # Cek deteksi suspended dari Subscriptions API atau DOM Table
+                                    is_sub_suspended = False
+                                    for check_key in (sl_num.lower(), site.lower(), t_nick.lower(), acc_name.lower()):
+                                        if not check_key:
+                                            continue
+                                        if any(check_key in s for s in dom_suspended_items):
+                                            is_sub_suspended = True
+                                            break
+                                        if check_key in sub_map:
+                                            s_data = sub_map[check_key]
+                                            s_st = str(s_data.get("status") or s_data.get("subscriptionStatus") or s_data.get("serviceStatus") or "").lower()
+                                            if s_st in _SUSPEND_STATUS_VALUES or s_data.get("isSuspended") is True or s_data.get("suspended") is True:
+                                                is_sub_suspended = True
+                                                break
+
                                     # Status resolution:
                                     # - 'suspended': akun belum dibayar / kendala pembayaran billing
                                     # - 'restricted': pelanggaran ToS Enterprise/Business
@@ -795,9 +852,9 @@ async def scrape_accounts(
                                     if home_page_status == "suspended":
                                         final_status = "suspended"
                                         final_det    = home_detail or "DOM: account/billing suspended"
-                                    elif sl_status == "suspended":
+                                    elif sl_status == "suspended" or is_sub_suspended:
                                         final_status = "suspended"
-                                        final_det    = sl_det or "Subscription suspended"
+                                        final_det    = sl_det if sl_status == "suspended" else "Subscription suspended"
                                     elif sl_status == "restricted":
                                         final_status = "restricted"
                                         final_det    = sl_det

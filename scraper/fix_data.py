@@ -129,6 +129,7 @@ def fix():
                 "KIT404637132PCK": {"site": "POS SECURITY D8", "quota": "0.00 GB"},
                 "KIT404212936PTP": {"site": "MUA SPR", "quota": "741.12 GB"},
                 "KIT404212940NTC": {"site": "NEW BURING JAMBI", "quota": "6.54 TB"},
+                "KIT404063062ZCT": {"site": "ANJA AFD4", "quota": "650.82 GB"},
             }
 
             fixed_suspended_count = 0
@@ -166,7 +167,7 @@ def fix():
                 SET status = 'inactive'
                 WHERE status = 'suspended'
                   AND restriction_detail LIKE '%Subscription inactive%'
-                  AND kit NOT IN ('KIT404058868WGQ', 'KIT4046376504JD', 'KIT404637170DSN', 'KIT404637132PCK', 'KIT404212936PTP', 'KIT404212940NTC', 'KIT404407267PDF', 'KIT404407253WCQ')
+                  AND kit NOT IN ('KIT404058868WGQ', 'KIT4046376504JD', 'KIT404637170DSN', 'KIT404637132PCK', 'KIT404212936PTP', 'KIT404212940NTC', 'KIT404407267PDF', 'KIT404407253WCQ', 'KIT404063062ZCT')
             """)
             if cur.rowcount > 0:
                 print(f"    [OK] {cur.rowcount} KIT dikembalikan dari 'suspended' ke 'inactive'.")

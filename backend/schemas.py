@@ -84,6 +84,13 @@ class KitOut(BaseModel):
         from_attributes = True
 
 
+class KitUpdate(BaseModel):
+    status: Optional[str] = None
+    restriction_detail: Optional[str] = None
+    site: Optional[str] = None
+    quota: Optional[str] = None
+
+
 # ── Scrape Job ────────────────────────────────────────────────────────────────
 class ScrapeJobOut(BaseModel):
     id: int

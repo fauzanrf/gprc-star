@@ -11,3 +11,4 @@ pydantic>=2.0.0
 python-multipart>=0.0.9
 requests>=2.31.0
 filelock>=3.14.0
+openpyxl>=3.1.2

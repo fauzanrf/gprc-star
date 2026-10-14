@@ -54,9 +54,9 @@
     "site": "ANJA AFD4",
     "sn": "4PBA04034549VMX",
     "kit": "KIT404063062ZCT",
-    "status": "active",
-    "quota": "712.82 GB",
-    "restriction_detail": "",
+    "status": "suspended",
+    "quota": "650.82 GB",
+    "restriction_detail": "Subscription suspended",
     "scraped_at": "2026-09-18T06:58:52.434610+00:00"
   },
   {

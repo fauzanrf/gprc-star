@@ -283,7 +283,7 @@ class ScrapeManager:
             if self._cancel_requested:
                 self._update_job(job_id, "failed", total_kits, "\n".join(log_lines) + "\n[CANCELLED]")
                 await self.broadcast(json.dumps({"type": "job_failed", "job_id": job_id, "message": "Dibatalkan"}))
-            elif all_ok:
+            elif all_ok or total_kits > 0:
                 actual_kits = total_kits
                 try:
                     conn = self._get_conn()
@@ -300,11 +300,14 @@ class ScrapeManager:
                     pass
                 self._update_job(job_id, "done", actual_kits, "\n".join(log_lines))
                 await self.broadcast(json.dumps({"type": "job_done", "job_id": job_id, "total_kits": actual_kits}))
-                await log(f"\n[Job {job_id}] SEMUA SCRAPING SELESAI! Total {actual_kits} KIT tersinkronisasi.")
+                if all_ok:
+                    await log(f"\n[Job {job_id}] SEMUA SCRAPING SELESAI! Total {actual_kits} KIT tersinkronisasi.")
+                else:
+                    await log(f"\n[Job {job_id}] SCRAPING SELESAI DENGAN CATATAN! Total {actual_kits} KIT tersinkronisasi (beberapa akun lain butuh login ulang).")
             else:
-                self._update_job(job_id, "failed", total_kits, "\n".join(log_lines))
+                self._update_job(job_id, "failed", 0, "\n".join(log_lines))
                 await self.broadcast(json.dumps({"type": "job_failed", "job_id": job_id}))
-                await log(f"\n[Job {job_id}] SELESAI DENGAN CATATAN (beberapa akun gagal/butuh login).")
+                await log(f"\n[Job {job_id}] GAGAL: Tidak ada KIT yang berhasil di-scrape. Periksa sesi login akun induk.")
 
         except Exception as e:
             if not self._cancel_requested:

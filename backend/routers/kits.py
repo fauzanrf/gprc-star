@@ -1,11 +1,12 @@
 """Kits endpoints."""
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
-from models import Kit, Account
-from schemas import KitOut
+from models import Kit, Account, User
+from schemas import KitOut, KitUpdate
+from auth_utils import get_optional_current_user
 
 router = APIRouter(prefix="/api/kits", tags=["kits"])
 
@@ -91,4 +92,54 @@ def list_kits(
 
         result.append(out)
     return result
+
+
+@router.patch("/{kit_id}", response_model=KitOut)
+def update_kit(
+    kit_id: int,
+    payload: KitUpdate,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    """Update status, keterangan, site, atau kuota kit."""
+    if current_user and current_user.role in ("viewer", "magang"):
+        raise HTTPException(status_code=403, detail="Role 'viewer' tidak memiliki izin edit.")
+
+    kit = db.query(Kit).options(joinedload(Kit.account)).filter(Kit.id == kit_id).first()
+    if not kit:
+        raise HTTPException(status_code=404, detail="Kit tidak ditemukan.")
+
+    if payload.status is not None:
+        if payload.status not in ("active", "restricted", "suspended", "inactive"):
+            raise HTTPException(status_code=400, detail="Status tidak valid. Pilihan: active, restricted, suspended, inactive.")
+        kit.status = payload.status
+
+    if payload.restriction_detail is not None:
+        kit.restriction_detail = payload.restriction_detail
+
+    if payload.site is not None:
+        kit.site = payload.site
+
+    if payload.quota is not None:
+        kit.quota = payload.quota
+
+    db.commit()
+    db.refresh(kit)
+
+    out = KitOut.from_orm(kit)
+    if kit.account:
+        out.account_number = kit.account.account_number
+        out.account_name   = kit.account.account_name
+        out.email          = kit.account.email
+
+    val_tb = parse_quota_tb(kit.quota)
+    if val_tb >= 5.0:
+        out.quota_alert = "limit"
+    elif val_tb >= 4.5:
+        out.quota_alert = "near_full"
+    else:
+        out.quota_alert = None
+
+    return out
+
 

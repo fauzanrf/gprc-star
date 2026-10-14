@@ -230,8 +230,9 @@ def deduplicate_rows(rows: list) -> list:
         quota = (r.get("quota") or "").strip()
         has_traffic = bool(quota and quota not in ("-", "0.00 GB", "0 GB", "0 MB", "0.0 GB", "0"))
         # Skor status: suspended dan restricted memiliki prioritas tertinggi agar tidak tertimpa status stale
-        status_score = {"suspended": 5, "restricted": 4, "active": 3, "inactive": 1}.get(status, 0)
-        return (1 if has_traffic else 0, status_score)
+        status_score = {"suspended": 50, "restricted": 40, "active": 30, "inactive": 10}.get(status, 0)
+        traffic_score = 1 if has_traffic else 0
+        return (status_score, traffic_score)
 
     unique_map: dict[str, dict] = {}
     non_kit_rows: list[dict] = []
