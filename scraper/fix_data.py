@@ -129,7 +129,6 @@ def fix():
                 "KIT404637132PCK": {"site": "POS SECURITY D8", "quota": "0.00 GB"},
                 "KIT404212936PTP": {"site": "MUA SPR", "quota": "741.12 GB"},
                 "KIT404212940NTC": {"site": "NEW BURING JAMBI", "quota": "6.54 TB"},
-                "KIT404063062ZCT": {"site": "ANJA AFD4", "quota": "650.82 GB"},
             }
 
             fixed_suspended_count = 0
@@ -144,6 +143,16 @@ def fix():
                 if cur.rowcount > 0:
                     fixed_suspended_count += cur.rowcount
                     print(f"    [OK] {info['site']} ({k_sn}): status diperbarui ke 'suspended' ({info['quota']})")
+
+            # Pulihkan kit yang sudah kembali aktif di Starlink
+            cur.execute("""
+                UPDATE kits 
+                SET status = 'active', 
+                    restriction_detail = ''
+                WHERE kit = 'KIT404063062ZCT' OR site = 'ANJA AFD4'
+            """)
+            if cur.rowcount > 0:
+                print("    [OK] ANJA AFD4 (KIT404063062ZCT) berhasil diperbarui ke 'active'.")
 
             # 5. Pastikan kit tidak terpakai dalam sub-akun aktif berstatus 'inactive', BUKAN 'suspended'
             print("\n[+] Memastikan KIT tidak terpakai di sub-akun aktif berstatus 'inactive'...")
@@ -167,7 +176,7 @@ def fix():
                 SET status = 'inactive'
                 WHERE status = 'suspended'
                   AND restriction_detail LIKE '%Subscription inactive%'
-                  AND kit NOT IN ('KIT404058868WGQ', 'KIT4046376504JD', 'KIT404637170DSN', 'KIT404637132PCK', 'KIT404212936PTP', 'KIT404212940NTC', 'KIT404407267PDF', 'KIT404407253WCQ', 'KIT404063062ZCT')
+                  AND kit NOT IN ('KIT404058868WGQ', 'KIT4046376504JD', 'KIT404637170DSN', 'KIT404637132PCK', 'KIT404212936PTP', 'KIT404212940NTC', 'KIT404407267PDF', 'KIT404407253WCQ')
             """)
             if cur.rowcount > 0:
                 print(f"    [OK] {cur.rowcount} KIT dikembalikan dari 'suspended' ke 'inactive'.")

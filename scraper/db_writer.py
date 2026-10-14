@@ -71,7 +71,7 @@ def upsert_kit(conn, account_id: int, row: dict) -> bool:
                  sn                = IF(VALUES(sn) != '-' AND VALUES(sn) != '', VALUES(sn), sn),
                  status            = IF(status = 'active' AND VALUES(status) = 'inactive' AND quota NOT IN ('-', '0.00 GB', '0 GB', '0 MB', '0.0 GB', '0'), status, VALUES(status)),
                  quota             = IF(VALUES(quota) NOT IN ('-', '', '0.00 GB', '0 GB', '0 MB', '0.0 GB', '0') OR quota IN ('-', '', '0.00 GB', '0 GB', '0 MB', '0.0 GB', '0'), VALUES(quota), quota),
-                 restriction_detail= IF(VALUES(restriction_detail) != '' OR restriction_detail IS NULL, VALUES(restriction_detail), restriction_detail),
+                 restriction_detail= IF(VALUES(status) = 'active', '', IF(VALUES(restriction_detail) != '' OR restriction_detail IS NULL, VALUES(restriction_detail), restriction_detail)),
                  scraped_at        = VALUES(scraped_at)""",
             (
                 account_id,

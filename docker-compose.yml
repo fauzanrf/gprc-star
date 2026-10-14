@@ -53,6 +53,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ./backend:/app/backend
       - ./scraper:/app/scraper
       - export_data:/data
     networks:

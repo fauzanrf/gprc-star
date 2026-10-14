@@ -229,10 +229,9 @@ def deduplicate_rows(rows: list) -> list:
         status = (r.get("status") or "").lower()
         quota = (r.get("quota") or "").strip()
         has_traffic = bool(quota and quota not in ("-", "0.00 GB", "0 GB", "0 MB", "0.0 GB", "0"))
-        # Skor status: suspended dan restricted memiliki prioritas tertinggi agar tidak tertimpa status stale
-        status_score = {"suspended": 50, "restricted": 40, "active": 30, "inactive": 10}.get(status, 0)
+        status_score = {"active": 4, "suspended": 4, "restricted": 4, "inactive": 1}.get(status, 2)
         traffic_score = 1 if has_traffic else 0
-        return (status_score, traffic_score)
+        return (traffic_score, status_score)
 
     unique_map: dict[str, dict] = {}
     non_kit_rows: list[dict] = []
@@ -259,32 +258,47 @@ def deduplicate_rows(rows: list) -> list:
 def merge_results(worker_output_files: list, existing_json_path: str | Path | None = None) -> list:
     """
     Gabungkan semua file JSON dari worker menjadi satu list.
-    Deduplikasi KIT fisik unik dan assign nomor urut berurutan dari 1.
-    Jika existing_json_path ada, pertahankan KIT historis yang belum terambil di sesi ini.
+    Data dari worker sesi saat ini selalu merupakan state terbaru (fresh data).
+    Data historis (existing_json_path) hanya digunakan untuk melengkapi KIT yang belum terambil di sesi ini.
     """
-    merged = []
-
-    # Muat data lama terlebih dahulu jika ada, agar tidak ada KIT historis yang terhapus
-    if existing_json_path and Path(existing_json_path).exists():
-        try:
-            old_data = json.loads(Path(existing_json_path).read_text(encoding="utf-8"))
-            if isinstance(old_data, list):
-                merged.extend(old_data)
-        except Exception as e:
-            print(f"[Orchestrator] [!] Gagal baca existing JSON: {e}", flush=True)
-
+    # 1. Kumpulkan seluruh hasil dari worker sesi saat ini
+    fresh_rows = []
     for f in worker_output_files:
         p = Path(f)
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
-                merged.extend(data)
+                if isinstance(data, list):
+                    fresh_rows.extend(data)
             except Exception as e:
                 print(f"[Orchestrator] [!] Gagal baca {f}: {e}", flush=True)
         else:
             print(f"[Orchestrator] [!] File tidak ditemukan: {f}", flush=True)
 
-    return deduplicate_rows(merged)
+    fresh_deduped = deduplicate_rows(fresh_rows)
+    fresh_kits = {
+        (r.get("kit") or "").strip()
+        for r in fresh_deduped
+        if (r.get("kit") or "").strip() and (r.get("kit") or "").strip() not in ("-", "None", "null")
+    }
+
+    # 2. Muat data historis HANYA untuk KIT yang tidak ada di hasil worker sesi ini
+    historical_rows = []
+    if existing_json_path and Path(existing_json_path).exists():
+        try:
+            old_data = json.loads(Path(existing_json_path).read_text(encoding="utf-8"))
+            if isinstance(old_data, list):
+                for old_row in old_data:
+                    k_sn = (old_row.get("kit") or "").strip()
+                    if k_sn and k_sn not in fresh_kits:
+                        historical_rows.append(old_row)
+        except Exception as e:
+            print(f"[Orchestrator] [!] Gagal baca existing JSON: {e}", flush=True)
+
+    final_list = fresh_deduped + historical_rows
+    for i, row in enumerate(final_list, start=1):
+        row["no"] = i
+    return final_list
 
 
 def cleanup_temp_files(files: list):
